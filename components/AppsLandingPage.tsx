@@ -32,7 +32,7 @@ const apps = [
      {
         title: "Laboratorio de Escenarios",
         description: "Explora futuros alternativos y simula el impacto de decisiones clave.",
-        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" /></svg>,
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2-2H4a2 2 0 01-2-2v-4z" /></svg>,
         action: 'onOpenDigitalTwinLab',
         color: 'border-indigo-500/50 hover:border-indigo-400 hover:shadow-indigo-500/20'
     },
@@ -58,9 +58,9 @@ const apps = [
         color: 'border-orange-500/50 hover:border-orange-400 hover:shadow-orange-500/20'
     },
     {
-        title: "Datos en Vivo",
-        description: "Consulta los datos de calidad del aire de hoy y días anteriores.",
-        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 3.636a1 1 0 011.414 0L10 7.172l3.536-3.536a1 1 0 111.414 1.414L11.414 8.586l3.536 3.536a1 1 0 11-1.414 1.414L10 10.414l-3.536 3.536a1 1 0 01-1.414-1.414L8.586 8.586 5.05 5.05a1 1 0 010-1.414z" clipRule="evenodd" /></svg>,
+        title: "Datos de Ayer",
+        description: "Consulta los datos horarios de los principales contaminantes del último día registrado.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" /></svg>,
         action: 'onOpenRealTimeData',
         color: 'border-red-500/50 hover:border-red-400 hover:shadow-red-500/20'
     },

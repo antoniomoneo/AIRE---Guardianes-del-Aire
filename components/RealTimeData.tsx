@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -6,10 +7,8 @@ interface RealTimeDataProps {
   onClose: () => void;
 }
 
-// GitHub repository details
-const GITHUB_USER = 'antoniomoneo';
-const GITHUB_REPO = 'Datasets';
-const DATA_PATH = 'data/calair';
+// Using a CORS proxy to prevent browser-side fetch errors.
+const DATASET_URL = "https://corsproxy.io/?https%3A%2F%2Fstorage.googleapis.com%2Faire-470107-datasets-usw1%2Fcalair%2Flatest.flat.csv";
 
 const POLLUTANT_MAP: Record<string, { name: string }> = {
     '1': { name: 'Dióxido de Azufre (SO₂)' },
@@ -25,20 +24,31 @@ interface HourlyData {
     value: number;
 }
 
-const parseFlatCsv = (csvText: string): Record<PollutantCode, Record<number, number[]>> => {
+const parseFlatCsv = (csvText: string): { data: Record<PollutantCode, Record<number, number[]>>, date: Date | null } => {
     const lines = csvText.trim().split('\n');
     const headerLine = lines.shift();
-    if (!headerLine) return {};
-    const header = headerLine.split(',');
+    if (!headerLine) return { data: {}, date: null };
+    const header = headerLine.split(',').map(h => h.trim());
 
     const data: Record<PollutantCode, Record<number, number[]>> = {};
+    let fileDate: Date | null = null;
 
     lines.forEach(line => {
+        if (!line.trim()) return;
         const values = line.split(',');
         const row = header.reduce((obj, nextKey, index) => {
-            obj[nextKey.trim()] = values[index];
+            obj[nextKey] = values[index];
             return obj;
         }, {} as Record<string, string>);
+
+        if (!fileDate && row['ano'] && row['mes'] && row['dia']) {
+            const year = parseInt(row['ano']);
+            const month = parseInt(row['mes']) - 1; // Date month is 0-indexed
+            const day = parseInt(row['dia']);
+            if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                fileDate = new Date(year, month, day);
+            }
+        }
 
         const magnitude = row['magnitud'] as PollutantCode;
         if (!POLLUTANT_MAP[magnitude]) return;
@@ -63,7 +73,7 @@ const parseFlatCsv = (csvText: string): Record<PollutantCode, Record<number, num
             }
         }
     });
-    return data;
+    return { data, date: fileDate };
 };
 
 
@@ -80,31 +90,11 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose }) => {
             setLoading(true);
             setError(null);
             try {
-                const dirsRes = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${DATA_PATH}`);
-                if (!dirsRes.ok) throw new Error(`Error ${dirsRes.status}: No se pudo acceder al repositorio de datos.`);
-                const allContents = await dirsRes.json();
-                const dirs = allContents.filter((item: any) => item.type === 'dir' && /^\d{4}-\d{2}-\d{2}$/.test(item.name));
-
-                if (!Array.isArray(dirs) || dirs.length === 0) throw new Error('No se encontraron directorios de datos con fechas válidas.');
+                const res = await fetch(DATASET_URL, { cache: "no-store" });
+                if (!res.ok) throw new Error(`Error ${res.status}: No se pudo acceder al conjunto de datos.`);
+                const csvText = await res.text();
                 
-                dirs.sort((a: any, b: any) => b.name.localeCompare(a.name));
-                const latestDir = dirs[0];
-
-                const filesRes = await fetch(latestDir.url);
-                if (!filesRes.ok) throw new Error(`No se pudo acceder a los archivos del día ${latestDir.name}.`);
-                const dirFiles = await filesRes.json();
-                const files = dirFiles.filter((item: any) => item.name.endsWith('.flat.csv'));
-
-                if (!Array.isArray(files) || files.length === 0) throw new Error(`No se encontraron archivos de datos (.flat.csv) para el día ${latestDir.name}.`);
-                
-                files.sort((a: any, b: any) => b.name.localeCompare(a.name));
-                const latestFile = files[0];
-
-                const csvRes = await fetch(latestFile.download_url);
-                if (!csvRes.ok) throw new Error(`No se pudo descargar el archivo de datos ${latestFile.name}.`);
-                const csvText = await csvRes.text();
-                
-                const rawParsedData = parseFlatCsv(csvText);
+                const { data: rawParsedData, date: fileDate } = parseFlatCsv(csvText);
                 setParsedData(rawParsedData);
 
                 const pollutantsInFile = Object.keys(rawParsedData) as PollutantCode[];
@@ -115,14 +105,10 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose }) => {
                     throw new Error("El archivo de datos más reciente no contiene datos de contaminantes válidos.");
                 }
 
-                const match = latestFile.name.match(/(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z)/);
-                if (match) {
-                    const dateStr = match[1].substring(0, 10);
-                    const timeStr = match[1].substring(11, 19).replace(/-/g, ':');
-                    const date = new Date(`${dateStr}T${timeStr}Z`);
-                    setLastUpdateTimestamp(date.toLocaleString('es-ES', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }));
+                if (fileDate) {
+                    setLastUpdateTimestamp(fileDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }));
                 } else {
-                    setLastUpdateTimestamp(latestFile.name);
+                    setLastUpdateTimestamp("Último día disponible");
                 }
 
             } catch (e) {
@@ -178,7 +164,7 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose }) => {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
             <div className="bg-gray-900/95 border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-6xl h-full sm:h-[90vh] p-4 sm:p-6 flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center pb-4 border-b border-gray-700 flex-shrink-0">
-                    <h2 className="text-xl sm:text-2xl font-orbitron text-red-300">Datos Horarios Recientes</h2>
+                    <h2 className="text-xl sm:text-2xl font-orbitron text-red-300">Datos de Ayer</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
                 </div>
                 
@@ -186,7 +172,7 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose }) => {
                     <div className="flex items-center justify-center h-full">
                         <div className="text-center">
                             <div className="w-12 h-12 border-4 border-dashed rounded-full animate-spin border-red-400 mx-auto"></div>
-                            <p className="mt-4 text-lg">Buscando el último archivo de datos en el repositorio...</p>
+                            <p className="mt-4 text-lg">Cargando datos del último día disponible...</p>
                         </div>
                     </div>
                 )}
@@ -213,7 +199,7 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose }) => {
                             </div>
                             {lastUpdateTimestamp && (
                                 <p className="text-sm text-gray-400 text-right mt-2 sm:mt-0">
-                                    Últimos datos: <span className="font-semibold text-gray-200">{lastUpdateTimestamp}</span>
+                                    Datos del día: <span className="font-semibold text-gray-200">{lastUpdateTimestamp}</span>
                                 </p>
                             )}
                         </div>

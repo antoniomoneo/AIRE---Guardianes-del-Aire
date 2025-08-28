@@ -1,4 +1,5 @@
 
+
 import { v4 as uuidv4 } from 'uuid';
 import type { GalleryItem, AudioVizGalleryItem, Model3DGalleryItem, InsightGalleryItem } from '../types';
 import { awardPoints } from './scoringService';
@@ -11,7 +12,7 @@ const GITHUB_REPO = 'Aire-gallery';
 // This token is assumed to be provided in the execution environment, similar to the Gemini API_KEY.
 // It is NOT stored in the code.
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const API_BASE_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents`;
+const API_BASE_URL_CONTENT = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents`;
 
 const FOLDER_MAP: Record<GalleryItem['type'], string> = {
     'insight': 'insights',
@@ -21,7 +22,10 @@ const FOLDER_MAP: Record<GalleryItem['type'], string> = {
 
 // Helper for GitHub API requests
 async function githubApiRequest(path: string, options: RequestInit = {}) {
-    const url = `${API_BASE_URL}/${path}`;
+    const targetUrl = `${API_BASE_URL_CONTENT}/${path}`;
+    // To fix potential CORS issues, requests are routed through a proxy.
+    const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
     const headers: Record<string, string> = {
         'Accept': 'application/vnd.github.v3+json',
         'X-GitHub-Api-Version': '2022-11-28',
