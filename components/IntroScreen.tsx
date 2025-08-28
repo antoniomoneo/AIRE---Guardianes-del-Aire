@@ -8,10 +8,10 @@ interface IntroScreenProps {
 }
 
 const getIntroDialogues = (name: string) => [
-    { text: `¡Hola, ${name}! Te doy la bienvenida a A.I.R.E.`, image: "https://images.unsplash.com/photo-1543786659-a74de5e35e78?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" },
-    { text: "El aire que respiramos en nuestras ciudades es un tesoro invisible. Décadas de tráfico y actividad industrial lo han puesto en peligro, afectando nuestra salud y la del planeta.", image: "https://images.unsplash.com/photo-1627870313596-85e3d239103b?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" },
-    { text: "Tu misión es viajar por los datos para entender el pasado y dar forma a un futuro más limpio. Serás un Guardián o Guardiana del Aire, con el conocimiento y la creatividad como herramientas.", image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" },
-    { text: "He preparado un centro de aplicaciones con potentes herramientas para analizar, crear y simular. Úsalas para cumplir tu misión. ¿Estás listo/a?", image: "https://images.unsplash.com/photo-1587440871875-191322ee64b0?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }
+    { text: `¡Hola, ${name}! Te doy la bienvenida a A.I.R.E.`, image: "https://images.unsplash.com/photo-1519625594640-3d2af5181b2e?q=80&w=2070&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" },
+    { text: "El aire que respiramos en nuestras ciudades es un tesoro invisible. Décadas de tráfico y actividad industrial lo han puesto en peligro, afectando nuestra salud y la del planeta.", image: "https://images.unsplash.com/photo-1627870313596-85e3d239103b?q=80&w=1974&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" },
+    { text: "Tu misión es viajar por los datos para entender el pasado y dar forma a un futuro más limpio. Serás un Guardián o Guardiana del Aire, con el conocimiento y la creatividad como herramientas.", image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" },
+    { text: "He preparado un centro de aplicaciones con potentes herramientas para analizar, crear y simular. Úsalas para cumplir tu misión. ¿Estás listo/a?", image: "https://images.unsplash.com/photo-1587440871875-191322ee64b0?q=80&w=2071&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D" }
 ];
 
 export const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete, userName }) => {

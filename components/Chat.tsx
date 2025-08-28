@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { AirQualityRecord, ChatMessage } from '../types';
 import { GoogleGenAI } from '@google/genai';
@@ -11,8 +12,6 @@ interface ChatProps {
     onReset: () => void;
 }
 
-const API_KEY = process.env.API_KEY as string;
-
 export const Chat: React.FC<ChatProps> = ({ airQualityData, onReset }) => {
     const [chat, setChat] = useState<GenAIChat | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -24,12 +23,14 @@ export const Chat: React.FC<ChatProps> = ({ airQualityData, onReset }) => {
     useEffect(() => {
         const initChat = async () => {
             try {
-                if (!API_KEY) {
+                // Fix: Use process.env.API_KEY directly as per guidelines.
+                if (!process.env.API_KEY) {
                     setError("La clave de API no está configurada. No puedo conectar con A.I.R.E.");
                     console.error("API_KEY is not configured.");
                     return;
                 }
-                const ai = new GoogleGenAI({ apiKey: API_KEY });
+                // Fix: Use process.env.API_KEY directly for initialization as per guidelines.
+                const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                 
                 const newChat = ai.chats.create({
                     model: 'gemini-2.5-flash',
