@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { AirQualityRecord, ChatMessage } from '../types';
 import { GoogleGenAI } from '@google/genai';
@@ -104,8 +106,8 @@ export const Chat: React.FC<ChatProps> = ({ airQualityData, onReset }) => {
     };
 
     return (
-        <div className="flex flex-col h-[60vh] max-h-[700px] w-full bg-gray-900/80 backdrop-blur-md rounded-xl border border-cyan-500/30 shadow-lg">
-            <div className="flex-grow p-4 overflow-y-auto">
+        <div className="flex flex-col h-full w-full bg-gray-900/80 backdrop-blur-md rounded-xl border border-cyan-500/30 shadow-lg">
+            <div className="flex-grow p-4 overflow-y-auto min-h-0">
                 {messages.map(renderMessage)}
                 {isLoading && (
                     <div className="flex items-start gap-3 my-4">

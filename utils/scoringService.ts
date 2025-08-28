@@ -1,8 +1,9 @@
 
+
 import type { User } from '../types';
 
 const USERS_KEY = 'aire_users';
-const NARRATIVE_COMPLETED_KEY = 'aire_narrative_completed';
+const NARRATIVE_COMPLETED_KEY = 'aire_narrative_completed_v2'; // v2 to reset for users of old version
 
 const getUsers = (): User[] => {
     try {
@@ -22,16 +23,31 @@ const saveUsers = (users: User[]): void => {
     }
 };
 
-export const setNarrativeCompletedFlag = (): void => {
+export const awardNarrativePoints = (userName: string): void => {
     try {
-        // Only set the flag if it hasn't been set before to prevent re-awarding points
-        if (window.localStorage.getItem(NARRATIVE_COMPLETED_KEY) !== 'completed') {
-            window.localStorage.setItem(NARRATIVE_COMPLETED_KEY, 'true');
+        // Only award points if the narrative has not been completed before
+        if (window.localStorage.getItem(NARRATIVE_COMPLETED_KEY) === 'completed') {
+            return;
         }
+
+        const users = getUsers();
+        let user = users.find(u => u.name.toLowerCase() === userName.toLowerCase());
+
+        if (!user) {
+            user = { name: userName, score: 0 };
+            users.push(user);
+        }
+
+        user.score += 200; // Award 200 points for first-time story completion
+        saveUsers(users);
+
+        // Mark as completed to prevent re-awarding
+        window.localStorage.setItem(NARRATIVE_COMPLETED_KEY, 'completed');
     } catch (error) {
-        console.warn(`Failed to set narrative flag in localStorage:`, error);
+        console.warn(`Failed to award narrative points in localStorage:`, error);
     }
 };
+
 
 export const awardPoints = (userName: string, points: number): void => {
     try {
@@ -43,13 +59,6 @@ export const awardPoints = (userName: string, points: number): void => {
             users.push(user);
         }
         
-        // Check if narrative was just completed and add bonus points.
-        // This is separate from the item publication points.
-        if (window.localStorage.getItem(NARRATIVE_COMPLETED_KEY) === 'true') {
-            user.score += 300; // Award 300 points for first-time story completion
-            window.localStorage.setItem(NARRATIVE_COMPLETED_KEY, 'completed'); // Mark as completed to prevent re-awarding
-        }
-
         user.score += points;
         saveUsers(users);
     } catch (error) {

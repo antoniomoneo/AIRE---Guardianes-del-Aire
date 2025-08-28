@@ -1,4 +1,5 @@
 
+
 import React, { useEffect } from 'react';
 
 interface InstructionsProps {
@@ -38,6 +39,7 @@ export const Instructions: React.FC<InstructionsProps> = ({ onClose, userName })
 
                     <h3 className="text-xl font-orbitron text-white pt-2">Tus Herramientas</h3>
                     <ul className="list-disc list-inside space-y-3 pl-4">
+                        <li><span className="font-bold text-green-400">Asistente A.I.R.E.:</span> Hazle preguntas directas a la IA sobre la calidad del aire, las normativas o los datos históricos para resolver tus dudas.</li>
                         <li><span className="font-bold text-cyan-400">Panel de Control:</span> Analiza en detalle todos los datos históricos de los principales contaminantes. Filtra por fechas, agrupa por años o meses y saca tus propias conclusiones.</li>
                         <li><span className="font-bold text-purple-400">Audio & Viz Studio:</span> Transforma los datos en una pieza audiovisual única. Combina visualizaciones generativas con música creada a partir de los niveles de contaminación.</li>
                         <li><span className="font-bold text-orange-400">3D Studio:</span> Convierte los datos en esculturas y terrenos tridimensionales. Modela la información para verla desde una perspectiva completamente nueva.</li>
@@ -48,9 +50,9 @@ export const Instructions: React.FC<InstructionsProps> = ({ onClose, userName })
                      <p>Gana puntos para subir en el <span className="font-bold text-green-400">Ranking</span> y demostrar tu compromiso como Guardián o Guardiana del Aire:</p>
                     <ul className="list-disc list-inside space-y-3 pl-4">
                         <li><span className="font-bold text-white">500 Puntos:</span> Publica un análisis (conclusión y recomendación) desde el Panel de Control. ¡Es la acción más valiosa!</li>
+                         <li><span className="font-bold text-white">200 Puntos:</span> Completa el viaje narrativo con A.I.R.E. ("Simulador Data Story") por primera vez.</li>
                         <li><span className="font-bold text-white">100 Puntos:</span> Publica una creación desde el Audio & Viz Studio.</li>
                         <li><span className="font-bold text-white">100 Puntos:</span> Publica un modelo 3D desde el 3D Studio.</li>
-                        <li><span className="font-bold text-white">300 Puntos:</span> Completa el viaje narrativo con A.I.R.E. ("Simulador Data Story") por primera vez.</li>
                         <li><span className="font-bold text-white">10 Puntos:</span> Por cada "like" que recibas en cualquiera de tus publicaciones en la Galería.</li>
                     </ul>
 

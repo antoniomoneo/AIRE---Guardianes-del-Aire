@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Scene } from './components/Scene';
 import { useAirQualityData } from './hooks/useAirQualityData';
@@ -12,7 +13,7 @@ import { Gallery } from './components/Gallery';
 import { Ranking } from './components/Ranking';
 import { EducationalPack } from './components/EducationalPack';
 import { Glossary } from './components/Glossary';
-import { setNarrativeCompletedFlag } from './utils/scoringService';
+import { awardNarrativePoints } from './utils/scoringService';
 import { cancel as cancelSpeech } from './utils/ttsService';
 import { RealTimeData } from './components/RealTimeData';
 import { AppsLandingPage } from './components/AppsLandingPage';
@@ -21,6 +22,9 @@ import { TitleScreen } from './components/TitleScreen';
 import { CoverScreen } from './components/CoverScreen';
 import { IntroScreen } from './components/IntroScreen';
 import { DigitalTwinLab } from './components/DigitalTwinLab';
+import { Chat } from './components/Chat';
+import { AIEye } from './components/AIEye';
+
 
 type AppState = 'splash' | 'title' | 'cover' | 'intro' | 'apps';
 const INTRO_COMPLETED_KEY = 'aire_intro_completed';
@@ -41,6 +45,7 @@ const App: React.FC = () => {
   const [isGlossaryOpen, setIsGlossaryOpen] = useState(false);
   const [isDataStoryOpen, setIsDataStoryOpen] = useState(false);
   const [isDigitalTwinLabOpen, setIsDigitalTwinLabOpen] = useState(false);
+  const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
 
   const [isNarrationEnabled, setIsNarrationEnabled] = useState(true);
   const { data, loading, error } = useAirQualityData();
@@ -96,6 +101,7 @@ const App: React.FC = () => {
     setIsGlossaryOpen(false);
     setIsDataStoryOpen(false);
     setIsDigitalTwinLabOpen(false);
+    setIsAiAssistantOpen(false);
   }, []);
 
   const handleGoHome = useCallback(() => {
@@ -199,6 +205,7 @@ const App: React.FC = () => {
                 onOpenGlossary={() => openModal(setIsGlossaryOpen)}
                 onOpenDataStory={() => openModal(setIsDataStoryOpen)}
                 onOpenDigitalTwinLab={() => openModal(setIsDigitalTwinLabOpen)}
+                onOpenAiAssistant={() => openModal(setIsAiAssistantOpen)}
             />;
         default: return null;
     }
@@ -274,6 +281,10 @@ const App: React.FC = () => {
       {isDigitalTwinLabOpen && data && (
         <DigitalTwinLab data={data} onClose={() => setIsDigitalTwinLabOpen(false)} />
       )}
+
+      {isAiAssistantOpen && data && (
+        <AiAssistantModal data={data} onClose={() => setIsAiAssistantOpen(false)} />
+      )}
     </main>
   );
 };
@@ -284,14 +295,14 @@ const DataStory: React.FC<{data: any, onClose: () => void, isNarrationEnabled: b
 
     const handleNext = useCallback(() => {
         if (currentSceneIndex === SCENES.length - 2) {
-            setNarrativeCompletedFlag();
+            awardNarrativePoints(userName);
         }
         if (currentSceneIndex < SCENES.length - 1) {
             setCurrentSceneIndex(prev => prev + 1);
         } else {
             onClose(); // Close modal on final scene
         }
-    }, [currentSceneIndex, onClose]);
+    }, [currentSceneIndex, onClose, userName]);
 
     const handleReset = useCallback(() => {
         setCurrentSceneIndex(0);
@@ -332,6 +343,31 @@ const DataStory: React.FC<{data: any, onClose: () => void, isNarrationEnabled: b
       </div>
     )
 }
+
+const AiAssistantModal: React.FC<{data: any, onClose: () => void}> = ({ data, onClose }) => {
+    const [chatKey, setChatKey] = useState(0);
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className="bg-gray-900/95 border border-cyan-500/30 rounded-2xl shadow-2xl w-full max-w-3xl h-full max-h-[90vh] p-6 flex flex-col relative" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center pb-4 border-b border-gray-700 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                        <AIEye />
+                        <h2 className="text-2xl font-orbitron text-cyan-300">Asistente A.I.R.E.</h2>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
+                </div>
+                <div className="flex-grow mt-4 -mx-6 -mb-6">
+                    <Chat
+                        key={chatKey}
+                        airQualityData={data}
+                        onReset={() => setChatKey(k => k + 1)}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 
 export default App;
