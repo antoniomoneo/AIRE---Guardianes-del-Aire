@@ -1,11 +1,17 @@
 
-import React, { useEffect } from 'react';
+
+import React, { useEffect, useRef } from 'react';
+import { awardPoints } from '../utils/scoringService';
 
 interface EducationalPackProps {
   onClose: () => void;
+  userName: string;
 }
 
-export const EducationalPack: React.FC<EducationalPackProps> = ({ onClose }) => {
+export const EducationalPack: React.FC<EducationalPackProps> = ({ onClose, userName }) => {
+    const scrollableContainerRef = useRef<HTMLDivElement>(null);
+    const hasAwardedPoints = useRef(false);
+
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
@@ -13,10 +19,29 @@ export const EducationalPack: React.FC<EducationalPackProps> = ({ onClose }) => 
           }
         };
         window.addEventListener('keydown', handleKeyDown);
+
+        const container = scrollableContainerRef.current;
+        if (!container || !userName) return;
+
+        const handleScroll = () => {
+            if (hasAwardedPoints.current) return;
+            // Check if scrolled near the bottom (with a 100px buffer)
+            if (container.scrollHeight - container.scrollTop <= container.clientHeight + 100) {
+                awardPoints(userName, 200);
+                hasAwardedPoints.current = true;
+                container.removeEventListener('scroll', handleScroll);
+            }
+        };
+        
+        container.addEventListener('scroll', handleScroll);
+        
         return () => {
           window.removeEventListener('keydown', handleKeyDown);
+          if (container) {
+            container.removeEventListener('scroll', handleScroll);
+          }
         };
-      }, [onClose]);
+      }, [onClose, userName]);
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -25,7 +50,7 @@ export const EducationalPack: React.FC<EducationalPackProps> = ({ onClose }) => 
                     <h2 className="text-2xl font-orbitron text-teal-300">Pack Educativo: Guardianes del Aire</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
                 </div>
-                <div className="flex-grow mt-4 pr-2 overflow-y-auto text-gray-300 space-y-6">
+                <div ref={scrollableContainerRef} className="flex-grow mt-4 pr-2 overflow-y-auto text-gray-300 space-y-6">
                     <p className="font-bold text-teal-400 text-lg">
                         Guía de uso para una clase de 4 sesiones con estudiantes de ~15 años. El objetivo es convertir los datos de calidad del aire en una herramienta de aprendizaje activo, pensamiento crítico y creatividad.
                     </p>

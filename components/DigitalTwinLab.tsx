@@ -1,13 +1,16 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { AirQualityRecord, DashboardDataPoint } from '../types';
 import { generateSimulation, SCENARIOS } from '../utils/simulationService';
 import type { ScenarioId } from '../utils/simulationService';
+import { awardPoints } from '../utils/scoringService';
 
 interface DigitalTwinLabProps {
   data: AirQualityRecord[];
   onClose: () => void;
+  userName: string;
 }
 
 const SCENARIO_JUSTIFICATIONS: Record<ScenarioId, { title: string; justification: string }> = {
@@ -29,14 +32,20 @@ const SCENARIO_JUSTIFICATIONS: Record<ScenarioId, { title: string; justification
     }
 };
 
-export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose }) => {
+export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, userName }) => {
     const [selectedScenario, setSelectedScenario] = useState<ScenarioId>('NO_MADRID_CENTRAL');
+    const hasAwardedPoints = useRef(false);
 
     useEffect(() => {
+        if (userName && !hasAwardedPoints.current) {
+            awardPoints(userName, 100);
+            hasAwardedPoints.current = true;
+        }
+
         const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    }, [onClose, userName]);
 
     const historicalData = useMemo<DashboardDataPoint[]>(() => {
         const annualData = data.reduce((acc, curr) => {

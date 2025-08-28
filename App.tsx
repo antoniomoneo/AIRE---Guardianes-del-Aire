@@ -243,11 +243,11 @@ const App: React.FC = () => {
       )}
 
       {isGlossaryOpen && (
-        <Glossary onClose={() => setIsGlossaryOpen(false)} />
+        <Glossary onClose={() => setIsGlossaryOpen(false)} userName={userName} />
       )}
 
       {isEducationalPackOpen && (
-        <EducationalPack onClose={() => setIsEducationalPackOpen(false)} />
+        <EducationalPack onClose={() => setIsEducationalPackOpen(false)} userName={userName} />
       )}
 
       {isGalleryOpen && (
@@ -275,15 +275,15 @@ const App: React.FC = () => {
       )}
 
       {isRealTimeDataOpen && (
-        <RealTimeData onClose={() => setIsRealTimeDataOpen(false)} />
+        <RealTimeData onClose={() => setIsRealTimeDataOpen(false)} userName={userName}/>
       )}
 
       {isDigitalTwinLabOpen && data && (
-        <DigitalTwinLab data={data} onClose={() => setIsDigitalTwinLabOpen(false)} />
+        <DigitalTwinLab data={data} onClose={() => setIsDigitalTwinLabOpen(false)} userName={userName}/>
       )}
 
       {isAiAssistantOpen && data && (
-        <AiAssistantModal data={data} onClose={() => setIsAiAssistantOpen(false)} />
+        <AiAssistantModal data={data} onClose={() => setIsAiAssistantOpen(false)} userName={userName} />
       )}
     </main>
   );
@@ -344,7 +344,7 @@ const DataStory: React.FC<{data: any, onClose: () => void, isNarrationEnabled: b
     )
 }
 
-const AiAssistantModal: React.FC<{data: any, onClose: () => void}> = ({ data, onClose }) => {
+const AiAssistantModal: React.FC<{data: any, onClose: () => void, userName: string}> = ({ data, onClose, userName }) => {
     const [chatKey, setChatKey] = useState(0);
 
     return (
@@ -361,6 +361,7 @@ const AiAssistantModal: React.FC<{data: any, onClose: () => void}> = ({ data, on
                     <Chat
                         key={chatKey}
                         airQualityData={data}
+                        userName={userName}
                         onReset={() => setChatKey(k => k + 1)}
                     />
                 </div>

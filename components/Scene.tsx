@@ -55,7 +55,8 @@ export const Scene: React.FC<SceneProps> = ({ sceneData, onNext, onReset, chartD
             // Go to the next scene after the quiz is correctly answered
             return sceneData.quiz ? <Quiz quizData={sceneData.quiz} onCorrect={onNext} /> : null;
         case 'chat':
-            return fullData ? <Chat airQualityData={fullData} onReset={onReset} /> : null;
+            // FIX: Pass userName prop to Chat component
+            return fullData ? <Chat airQualityData={fullData} onReset={onReset} userName={userName} /> : null;
         case 'dialogue':
         default:
             if (!currentDialogue) {

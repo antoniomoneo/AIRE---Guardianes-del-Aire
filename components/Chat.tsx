@@ -2,25 +2,29 @@
 
 
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { AirQualityRecord, ChatMessage } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import type { Chat as GenAIChat } from '@google/genai';
 import { AIEye } from './AIEye';
 import { AI_KNOWLEDGE_BASE } from '../constants';
+import { awardPoints } from '../utils/scoringService';
 
 interface ChatProps {
-    airQualityData: AirQualityRecord[]; // Keep for potential future use, e.g. live data questions
+    airQualityData: AirQualityRecord[];
     onReset: () => void;
+    userName: string;
 }
 
-export const Chat: React.FC<ChatProps> = ({ airQualityData, onReset }) => {
+export const Chat: React.FC<ChatProps> = ({ airQualityData, onReset, userName }) => {
     const [chat, setChat] = useState<GenAIChat | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const hasAwardedPoints = useRef(false);
 
     useEffect(() => {
         const initChat = async () => {
@@ -60,6 +64,11 @@ export const Chat: React.FC<ChatProps> = ({ airQualityData, onReset }) => {
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!userInput.trim() || isLoading || !chat) return;
+        
+        if (userName && !hasAwardedPoints.current) {
+            awardPoints(userName, 100);
+            hasAwardedPoints.current = true;
+        }
 
         const userMessage: ChatMessage = { role: 'user', text: userInput };
         setMessages(prev => [...prev, userMessage]);

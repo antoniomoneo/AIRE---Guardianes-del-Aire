@@ -1,8 +1,11 @@
 
-import React, { useEffect } from 'react';
+
+import React, { useEffect, useRef } from 'react';
+import { awardPoints } from '../utils/scoringService';
 
 interface GlossaryProps {
   onClose: () => void;
+  userName: string;
 }
 
 const glossaryData = [
@@ -26,8 +29,15 @@ const glossaryData = [
     { codMag: 431, mag: 'Metaparaxileno', abrev: 'MPX', unidad: 'mg/m³', codTec: 59, tec: 'Cromatografía de gases' },
 ];
 
-export const Glossary: React.FC<GlossaryProps> = ({ onClose }) => {
+export const Glossary: React.FC<GlossaryProps> = ({ onClose, userName }) => {
+    const hasAwardedPoints = useRef(false);
+
     useEffect(() => {
+        if (userName && !hasAwardedPoints.current) {
+            awardPoints(userName, 100);
+            hasAwardedPoints.current = true;
+        }
+
         const handleKeyDown = (event: KeyboardEvent) => {
           if (event.key === 'Escape') {
             onClose();
@@ -37,7 +47,7 @@ export const Glossary: React.FC<GlossaryProps> = ({ onClose }) => {
         return () => {
           window.removeEventListener('keydown', handleKeyDown);
         };
-      }, [onClose]);
+      }, [onClose, userName]);
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
