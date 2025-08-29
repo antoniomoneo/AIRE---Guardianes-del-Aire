@@ -1,5 +1,7 @@
 
+
 import React, { useState } from 'react';
+import { logoUrl, coverUrl } from '../utils/assets';
 
 interface CoverScreenProps {
     onStart: (name: string) => void;
@@ -12,11 +14,11 @@ export const CoverScreen: React.FC<CoverScreenProps> = ({ onStart, isLoading, er
 
     return (
         <div className="relative w-full h-full flex flex-col items-center justify-center p-4 text-center bg-gray-900 animate-fade-in">
-            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url('/media/cover.png')`, opacity: 0.3 }}></div>
+            <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${coverUrl})`, opacity: 0.3 }}></div>
             <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/80 to-transparent"></div>
             
             <div className="relative z-10 flex flex-col items-center">
-                <img src="/media/tdlogo.png" alt="Tangible Data Logo" className="w-auto h-16 mb-8" />
+                <img src={logoUrl} alt="Tangible Data Logo" className="w-auto h-16 mb-8" />
                 <h1 className="text-5xl md:text-7xl font-orbitron text-cyan-300">A.I.R.E</h1>
                 <h2 className="text-2xl md:text-3xl font-orbitron text-white mt-2">Guardianes del Aire de Madrid</h2>
                 

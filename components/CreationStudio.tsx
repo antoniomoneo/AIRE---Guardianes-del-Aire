@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import p5 from 'p5';
 import * as Tone from 'tone';
@@ -22,6 +23,7 @@ import { exportToVideo } from '../utils/videoExport';
 import { PublishModal } from './PublishModal';
 import { addGalleryItem } from '../utils/galleryService';
 import { awardPoints } from '../utils/scoringService';
+import { logoUrl } from '../utils/assets';
 
 interface CreationStudioProps {
   data: AirQualityRecord[];
@@ -375,7 +377,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             {/* --- Right Main Area --- */}
             <div className="lg:col-span-3 flex flex-col items-center justify-center p-4 min-w-0">
                 <div className="flex items-center justify-start gap-3 px-2 pb-2 w-full">
-                    <img src="/media/tdlogo.png" alt="Tangible Data Logo" className="h-6 w-auto" />
+                    <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
                     <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>
                 </div>
                 <div ref={canvasWrapperRef} className="w-full aspect-square bg-black rounded-lg shadow-lg shadow-purple-500/10">

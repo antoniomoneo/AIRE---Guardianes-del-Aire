@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Scene } from './components/Scene';
 import { useAirQualityData } from './hooks/useAirQualityData';
@@ -24,6 +25,7 @@ import { IntroScreen } from './components/IntroScreen';
 import { DigitalTwinLab } from './components/DigitalTwinLab';
 import { Chat } from './components/Chat';
 import { AIEye } from './components/AIEye';
+import { logoUrl } from './utils/assets';
 
 
 type AppState = 'splash' | 'title' | 'cover' | 'intro' | 'apps';
@@ -144,7 +146,7 @@ const App: React.FC = () => {
 
   const Header: React.FC = () => (
      <header className="absolute top-0 left-0 w-full p-4 z-30 flex justify-between items-center" aria-label="Encabezado principal">
-        <img src="/media/tdlogo.png" alt="Tangible Data Logo" className="h-8 w-auto cursor-pointer" onClick={handleRestartExperience} />
+        <img src={logoUrl} alt="Tangible Data Logo" className="h-8 w-auto cursor-pointer" onClick={handleRestartExperience} />
         <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
           <HeaderButton onClick={handleGoHome}>Inicio</HeaderButton>
           <HeaderButton onClick={() => openModal(setIsAboutOpen)}>Acerca de</HeaderButton>
