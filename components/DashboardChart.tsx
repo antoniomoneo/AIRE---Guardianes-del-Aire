@@ -31,7 +31,7 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantN
 
 
   return (
-    <div className="w-full h-full flex-grow">
+    <div className="w-full h-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />

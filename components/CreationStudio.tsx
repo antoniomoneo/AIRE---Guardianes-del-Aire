@@ -1,6 +1,14 @@
 
 
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+
+
+
+
+
+
+
+
+import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import p5 from 'p5';
 import * as Tone from 'tone';
 import { v4 as uuidv4 } from 'uuid';
@@ -130,47 +138,67 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
   useEffect(() => { setGeneratedVideo(null); }, [dataByPollutant, tracks, key, stepDuration, visualPollutant, selectedVizId, title]);
 
     // p5 instance management for responsive canvas
-    useEffect(() => {
-        if (p5InstanceRef.current) {
-            p5InstanceRef.current.remove();
-        }
-
+    useLayoutEffect(() => {
         const viz = VISUALIZATION_OPTIONS.find(v => v.id === selectedVizId);
-        if (!viz || !canvasWrapperRef.current) return;
+        const container = canvasWrapperRef.current;
+        if (!viz || !container) return;
+
+        let p5Instance: p5;
+        let resizeObserver: ResizeObserver;
+        let resizeTimeoutId: number | undefined;
+        let initialDrawTimeoutId: number | undefined;
 
         const sketchFunc = viz.sketch(visualData, { speed: 1 });
 
         const wrappedSketch = (p: p5) => {
             (p as any).getCurrentFrameIndex = () => currentFrameIndexRef.current;
-            
             p.setup = () => {
-                const size = canvasWrapperRef.current?.clientWidth || 400;
-                p.createCanvas(size, size).parent(canvasWrapperRef.current!);
+                p.createCanvas(container.clientWidth, container.clientWidth).parent(container);
                 sketchFunc(p).setup();
-                p.noLoop(); // We control drawing manually
+                p.noLoop();
             };
-
-            p.draw = () => {
-                sketchFunc(p).draw();
-            };
-
-            p.windowResized = () => {
-                if (!canvasWrapperRef.current) return;
-                const newSize = canvasWrapperRef.current.clientWidth;
-                p.resizeCanvas(newSize, newSize);
-                 if (!isPlaying) {
-                   setTimeout(() => p.redraw(), 0);
-                }
-            };
+            p.draw = () => { sketchFunc(p).draw(); };
         };
 
-        p5InstanceRef.current = new p5(wrappedSketch);
+        p5Instance = new p5(wrappedSketch);
+        p5InstanceRef.current = p5Instance;
+        const currentP5Instance = p5Instance; // Capture for currency check
+
+        const handleResize = () => {
+            // Currency check: ensure we only act on the current p5 instance
+            if (p5InstanceRef.current === currentP5Instance && container) {
+                const newSize = container.clientWidth;
+                currentP5Instance.resizeCanvas(newSize, newSize);
+                if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
+                resizeTimeoutId = window.setTimeout(() => {
+                    // Double-check currency before redraw
+                    if (p5InstanceRef.current === currentP5Instance) {
+                       currentP5Instance.redraw();
+                    }
+                }, 0);
+            }
+        };
+
+        resizeObserver = new ResizeObserver(handleResize);
+        resizeObserver.observe(container);
         
-        setTimeout(() => p5InstanceRef.current?.redraw(), 50);
+        initialDrawTimeoutId = window.setTimeout(() => {
+             if (p5InstanceRef.current === currentP5Instance) currentP5Instance.redraw();
+        }, 50);
 
         return () => {
-            if(p5InstanceRef.current) {
-                p5InstanceRef.current.remove();
+            if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
+            if (initialDrawTimeoutId) clearTimeout(initialDrawTimeoutId);
+
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+            setIsPlaying(false);
+
+            resizeObserver.disconnect();
+            
+            currentP5Instance.remove();
+            
+            if (p5InstanceRef.current === currentP5Instance) {
                 p5InstanceRef.current = null;
             }
         };
@@ -197,23 +225,24 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             return;
         }
 
-        if (visualData.length === 0) return;
-        await Tone.start();
+        const p5ToUse = p5InstanceRef.current;
+        if (visualData.length === 0 || !p5ToUse) return;
         
+        await Tone.start();
         setIsPlaying(true);
         currentFrameIndexRef.current = 0;
-
-        // Clear previous events
         Tone.Transport.cancel();
         
         renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
         
-        // Schedule visual updates
         const timelineLength = visualData.length;
-        for(let i=0; i < timelineLength; i++){
+        for(let i = 0; i < timelineLength; i++){
             Tone.Draw.schedule(() => {
-                currentFrameIndexRef.current = i;
-                if(p5InstanceRef.current) p5InstanceRef.current.redraw();
+                // Currency check: only redraw if the p5 instance is still the one that started playback
+                if (p5InstanceRef.current === p5ToUse) {
+                    currentFrameIndexRef.current = i;
+                    p5ToUse.redraw();
+                }
             }, i * stepDuration);
         }
         
@@ -287,7 +316,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
         
         <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 pt-4">
             {/* --- Left Sidebar --- */}
-            <div className="order-2 lg:order-1 w-full lg:w-1/4 space-y-6 overflow-y-auto pr-4 pb-4 flex-grow lg:flex-grow-0 min-h-0 lg:border-r lg:border-gray-700/50">
+            <div className="order-2 lg:order-1 w-full lg:w-[420px] lg:flex-shrink-0 space-y-6 overflow-y-auto pr-4 pb-4 min-h-0 lg:border-r lg:border-gray-700/50">
                 <section>
                     <h3 className="text-lg font-orbitron text-purple-100 border-b border-purple-500/20 pb-2 mb-4">Controles Visuales</h3>
                     <div className="space-y-4">
@@ -375,7 +404,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             </div>
 
             {/* --- Right Main Area --- */}
-            <div className="order-1 lg:order-2 w-full lg:w-3/4 flex flex-col items-center justify-center p-4 min-w-0 flex-shrink-0 lg:flex-shrink">
+            <div className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col items-center justify-center p-4 min-w-0 overflow-hidden">
                 <div className="flex items-center justify-start gap-3 px-2 pb-2 w-full">
                     <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
                     <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>

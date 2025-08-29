@@ -111,64 +111,66 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
         </div>
         
         <div className="flex-grow min-h-0 overflow-y-auto pr-2">
-            <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 mb-4">
-                <div className="flex-shrink-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Contaminante</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {Object.values(Pollutant).map(p => (
-                            <ControlButton key={p} onClick={() => setSelectedPollutant(p)} isActive={selectedPollutant === p}>
-                                {POLLUTANT_NAMES[p].match(/\(([^)]+)\)/)?.[1] || p}
-                            </ControlButton>
-                        ))}
+            <div className="flex flex-col min-h-full">
+                <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 mb-4 flex-shrink-0">
+                    <div className="flex-shrink-0">
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Contaminante</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.values(Pollutant).map(p => (
+                                <ControlButton key={p} onClick={() => setSelectedPollutant(p)} isActive={selectedPollutant === p}>
+                                    {POLLUTANT_NAMES[p].match(/\(([^)]+)\)/)?.[1] || p}
+                                </ControlButton>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Agrupación</h3>
+                        <div className="flex gap-2">
+                            <ControlButton onClick={() => setAggregation('annual')} isActive={aggregation === 'annual'}>Anual</ControlButton>
+                            <ControlButton onClick={() => setAggregation('monthly')} isActive={aggregation === 'monthly'}>Mensual</ControlButton>
+                        </div>
                     </div>
                 </div>
-                <div className="flex-shrink-0">
-                    <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Agrupación</h3>
-                    <div className="flex gap-2">
-                        <ControlButton onClick={() => setAggregation('annual')} isActive={aggregation === 'annual'}>Anual</ControlButton>
-                        <ControlButton onClick={() => setAggregation('monthly')} isActive={aggregation === 'monthly'}>Mensual</ControlButton>
-                    </div>
-                </div>
-            </div>
 
-            <div className="h-[45vh] min-h-[350px]">
-                 <DashboardChart data={chartData} pollutantName={POLLUTANT_NAMES[selectedPollutant]} />
-            </div>
-
-            <div className="pt-4 border-t border-gray-700 mt-4">
-                <h3 className="text-lg font-orbitron text-yellow-300 mb-3">Publica tu Análisis</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="conclusion" className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Conclusión</label>
-                        <textarea
-                            id="conclusion"
-                            value={conclusion}
-                            onChange={(e) => setConclusion(e.target.value)}
-                            placeholder="Escribe una breve conclusión basada en los datos que has observado..."
-                            className="w-full h-24 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm"
-                            maxLength={500}
-                        />
-                    </div>
-                    <div>
-                        <label htmlFor="recommendation" className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Recomendación</label>
-                        <textarea
-                            id="recommendation"
-                            value={recommendation}
-                            onChange={(e) => setRecommendation(e.target.value)}
-                            placeholder="Basado en tu conclusión, ¿qué recomendarías?"
-                            className="w-full h-24 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm"
-                            maxLength={500}
-                        />
-                    </div>
+                <div className="flex-grow min-h-[350px]">
+                     <DashboardChart data={chartData} pollutantName={POLLUTANT_NAMES[selectedPollutant]} />
                 </div>
-                <div className="mt-3 text-right">
-                    <button
-                        onClick={() => setIsPublishModalOpen(true)}
-                        disabled={!conclusion.trim() || !recommendation.trim()}
-                        className="px-6 py-2 bg-yellow-600 text-white font-bold rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-                    >
-                        Publicar en Galería
-                    </button>
+
+                <div className="pt-4 border-t border-gray-700 mt-4 flex-shrink-0">
+                    <h3 className="text-lg font-orbitron text-yellow-300 mb-3">Publica tu Análisis</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="conclusion" className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Conclusión</label>
+                            <textarea
+                                id="conclusion"
+                                value={conclusion}
+                                onChange={(e) => setConclusion(e.target.value)}
+                                placeholder="Escribe una breve conclusión basada en los datos que has observado..."
+                                className="w-full h-24 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm"
+                                maxLength={500}
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="recommendation" className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Recomendación</label>
+                            <textarea
+                                id="recommendation"
+                                value={recommendation}
+                                onChange={(e) => setRecommendation(e.target.value)}
+                                placeholder="Basado en tu conclusión, ¿qué recomendarías?"
+                                className="w-full h-24 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm"
+                                maxLength={500}
+                            />
+                        </div>
+                    </div>
+                    <div className="mt-3 text-right">
+                        <button
+                            onClick={() => setIsPublishModalOpen(true)}
+                            disabled={!conclusion.trim() || !recommendation.trim()}
+                            className="px-6 py-2 bg-yellow-600 text-white font-bold rounded-lg hover:bg-yellow-500 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        >
+                            Publicar en Galería
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

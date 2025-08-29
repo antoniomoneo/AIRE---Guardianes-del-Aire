@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+
+import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -70,7 +71,7 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
     }, [data, startYear, endYear, selectedPollutant]);
     
     // Main Three.js setup effect
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!canvasContainerRef.current) return;
         
         const container = canvasContainerRef.current;
@@ -86,6 +87,7 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
         renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
         rendererRef.current = renderer;
+        const currentRenderer = renderer; // Capture instance for currency check
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -101,13 +103,21 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
         let animationFrameId: number;
         const animate = () => {
             animationFrameId = requestAnimationFrame(animate);
+
+            // Currency check: stop animation if renderer has been replaced
+            if (rendererRef.current !== currentRenderer) {
+                cancelAnimationFrame(animationFrameId);
+                return;
+            }
+
             controls.update();
             renderer.render(scene, camera);
         };
         animate();
 
         const handleResize = () => {
-            if (!container) return;
+            // Currency check: only resize if the renderer and container are still valid
+            if (!container || !rendererRef.current || rendererRef.current !== currentRenderer) return;
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
@@ -117,11 +127,12 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
 
         return () => {
             cancelAnimationFrame(animationFrameId);
-            resizeObserver.unobserve(container);
+            resizeObserver.disconnect();
             if(container.contains(renderer.domElement)) {
                  container.removeChild(renderer.domElement);
             }
             renderer.dispose();
+            rendererRef.current = null;
             if (cleanupRef.current) cleanupRef.current();
         };
     }, []);
