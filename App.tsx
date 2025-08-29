@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Scene } from './components/Scene';
 import { useAirQualityData } from './hooks/useAirQualityData';
@@ -60,29 +58,31 @@ const App: React.FC = () => {
             isIntroCompleted = window.localStorage.getItem(INTRO_COMPLETED_KEY) === 'true';
         } catch (e) {
             console.warn("localStorage is not available. Progress will not be saved.");
-            isIntroCompleted = false;
         }
 
-        const pathName = window.location.pathname;
-        const hasNameInUrl = pathName && pathName.length > 1;
-
-        if (hasNameInUrl && isIntroCompleted) {
-          // Returning user who has completed the intro before
-          const nameFromUrl = decodeURIComponent(pathName.substring(1));
-          setUserName(nameFromUrl);
-          setAppState('apps');
-        } else {
-          // New user, or returning user who hasn't completed intro, or localStorage is blocked.
-          // Reset their state and start from the beginning.
-          if (hasNameInUrl) {
-            try {
-              window.history.replaceState({}, '', '/');
-            } catch (e) {
-              console.warn("History API not available.", e);
+        if (isIntroCompleted) {
+            const pathName = window.location.pathname;
+            const hasNameInUrl = pathName && pathName.length > 1;
+            if (hasNameInUrl) {
+                // Returning user with name, go straight to app
+                const nameFromUrl = decodeURIComponent(pathName.substring(1));
+                setUserName(nameFromUrl);
+                setAppState('apps');
+            } else {
+                // Returning user at root, ask for name again
+                setAppState('cover');
             }
-          }
-          setUserName('');
-          setAppState('cover');
+        } else {
+            // New user, must start at cover screen
+             const pathName = window.location.pathname;
+             if (pathName !== '/') {
+                try {
+                    window.history.replaceState({}, '', '/');
+                } catch (e) {
+                    console.warn("History API not available.", e);
+                }
+             }
+            setAppState('cover');
         }
       }, 2500); // Duration of the splash screen
       return () => clearTimeout(timer);
