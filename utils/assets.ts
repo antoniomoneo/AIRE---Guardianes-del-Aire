@@ -1,4 +1,7 @@
-import logoUrl from '../media/tdlogo.png';
-import coverUrl from '../media/cover.png';
+// By exporting the paths directly as strings, we bypass the module system
+// that was causing resolution errors. This approach relies on Vite's static
+// asset serving. For this to work, the 'media' folder containing the images
+// must be placed inside a 'public' directory at the root of the project.
 
-export { logoUrl, coverUrl };
+export const logoUrl = '/media/tdlogo.png';
+export const coverUrl = '/media/cover.png';
