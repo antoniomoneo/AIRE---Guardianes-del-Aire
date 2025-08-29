@@ -35,6 +35,15 @@ const SCENARIO_JUSTIFICATIONS: Record<ScenarioId, { title: string; justification
 export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, userName }) => {
     const [selectedScenario, setSelectedScenario] = useState<ScenarioId>('NO_MADRID_CENTRAL');
     const hasAwardedPoints = useRef(false);
+    const [isReady, setIsReady] = useState(false);
+    const chartContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const el = chartContainerRef.current;
+        if (el && el.clientWidth > 0 && el.clientHeight > 0) {
+            setIsReady(true);
+        }
+    }, []);
 
     useEffect(() => {
         if (userName && !hasAwardedPoints.current) {
@@ -70,7 +79,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
     const combinedData = useMemo(() => {
         return simulatedData.map((simPoint, index) => ({
             date: simPoint.date,
-            real: historicalData[index]?.value,
+            real: historicalData.find(d => d.date === simPoint.date)?.value,
             simulated: simPoint.value,
         }));
     }, [historicalData, simulatedData]);
@@ -87,7 +96,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                 </div>
                 
                 <div className="flex flex-col lg:flex-row flex-grow min-h-0">
-                    <div className="lg:w-1/3 xl:w-1/4 p-4 space-y-4 lg:border-r border-gray-700 overflow-y-auto">
+                    <div className="lg:w-1/3 xl:w-1/4 p-4 space-y-4 lg:border-r border-gray-700 overflow-y-auto flex-shrink-0">
                         <h3 className="text-lg font-bold text-gray-300">Selecciona un Escenario "Qué hubiera pasado si..."</h3>
                         {Object.entries(SCENARIOS).map(([id, { name }]) => (
                             <button key={id} onClick={() => setSelectedScenario(id as ScenarioId)}
@@ -106,10 +115,12 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                         </div>
                     </div>
 
-                    <div className="flex-grow p-4 min-h-[400px]">
-                        <div className="w-full h-full relative">
-                            <div className="absolute inset-0">
-                                 <ResponsiveContainer width="100%" height="100%">
+                    <div className="flex-1 p-4 min-h-0 flex flex-col" ref={chartContainerRef}>
+                        {!isReady ? (
+                            <div className="flex items-center justify-center h-full text-gray-400">Cargando simulador...</div>
+                        ) : (
+                            <div className="flex-grow">
+                                <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                         <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
@@ -124,7 +135,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                                     </LineChart>
                                 </ResponsiveContainer>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 

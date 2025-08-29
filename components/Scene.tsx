@@ -26,6 +26,10 @@ export const Scene: React.FC<SceneProps> = ({ sceneData, onNext, onReset, chartD
   useEffect(() => {
     setDialogueIndex(0);
     setActivity('dialogue');
+    // When a new scene loads, the chart component might be re-rendered or its data might change.
+    // Dispatching a resize event helps 'recharts' to correctly recalculate its container size,
+    // preventing rendering issues in responsive containers.
+    window.dispatchEvent(new Event('resize'));
   }, [sceneData]);
 
   const handleDialogueEnd = () => {
@@ -55,7 +59,6 @@ export const Scene: React.FC<SceneProps> = ({ sceneData, onNext, onReset, chartD
             // Go to the next scene after the quiz is correctly answered
             return sceneData.quiz ? <Quiz quizData={sceneData.quiz} onCorrect={onNext} /> : null;
         case 'chat':
-            // FIX: Pass userName prop to Chat component
             return fullData ? <Chat airQualityData={fullData} onReset={onReset} userName={userName} /> : null;
         case 'dialogue':
         default:
