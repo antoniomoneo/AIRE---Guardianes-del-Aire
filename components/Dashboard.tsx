@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Pollutant } from '../types';
 import { POLLUTANT_NAMES } from '../constants';
@@ -132,8 +133,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
                     </div>
                 </div>
 
-                <div className="flex-grow min-h-[350px]">
-                     <DashboardChart data={chartData} pollutantName={POLLUTANT_NAMES[selectedPollutant]} />
+                <div className="flex-grow min-h-[350px] relative">
+                    <div className="absolute inset-0">
+                        <DashboardChart data={chartData} pollutantName={POLLUTANT_NAMES[selectedPollutant]} />
+                    </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-700 mt-4 flex-shrink-0">

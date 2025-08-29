@@ -117,7 +117,7 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
 
         const handleResize = () => {
             // Currency check: only resize if the renderer and container are still valid
-            if (!container || !rendererRef.current || rendererRef.current !== currentRenderer) return;
+            if (rendererRef.current !== currentRenderer) return;
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
@@ -125,15 +125,34 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
         const resizeObserver = new ResizeObserver(handleResize);
         resizeObserver.observe(container);
 
+        // Capture controls for cleanup
+        const controlsToCleanup = controls;
+
         return () => {
+            const instanceToCleanup = currentRenderer;
+            
+            // 1. Immediately invalidate the ref. Any pending animation frame
+            // that runs after this line will fail its currency check and exit.
+            if (rendererRef.current === instanceToCleanup) {
+                rendererRef.current = null;
+            }
+
+            // 2. Stop scheduling new work.
             cancelAnimationFrame(animationFrameId);
             resizeObserver.disconnect();
-            if(container.contains(renderer.domElement)) {
-                 container.removeChild(renderer.domElement);
+            
+            // 3. Dispose of Three.js resources.
+            controlsToCleanup.dispose();
+            if (cleanupRef.current) {
+                cleanupRef.current();
+                cleanupRef.current = null; // Prevent re-cleanup
             }
-            renderer.dispose();
-            rendererRef.current = null;
-            if (cleanupRef.current) cleanupRef.current();
+            
+            // 4. Remove canvas from DOM and dispose renderer.
+            if (container && container.contains(instanceToCleanup.domElement)) {
+                container.removeChild(instanceToCleanup.domElement);
+            }
+            instanceToCleanup.dispose();
         };
     }, []);
 

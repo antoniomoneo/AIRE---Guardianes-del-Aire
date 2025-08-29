@@ -177,20 +177,24 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
                     ) : error ? (
                         <div className="flex items-center justify-center h-full text-center text-red-400">{error}</div>
                     ) : chartData && chartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="hour" stroke="#9ca3af" tick={{ fontSize: 12 }} label={{ value: 'Hora del día', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}/>
-                                <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={['auto', 'auto']} label={{ value: 'µg/m³', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#f87171' }}
-                                    labelStyle={{ color: '#fca5a5', fontWeight: 'bold' }}
-                                    formatter={(value: number) => [value, POLLUTANT_MAP[selectedPollutant].name]}
-                                    labelFormatter={(label) => `Hora: ${label}:00`}
-                                />
-                                <Line type="monotone" dataKey="value" name={POLLUTANT_MAP[selectedPollutant].name} stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 7 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                        <div className="w-full h-full relative">
+                            <div className="absolute inset-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis dataKey="hour" stroke="#9ca3af" tick={{ fontSize: 12 }} label={{ value: 'Hora del día', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}/>
+                                        <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={['auto', 'auto']} label={{ value: 'µg/m³', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#f87171' }}
+                                            labelStyle={{ color: '#fca5a5', fontWeight: 'bold' }}
+                                            formatter={(value: number) => [value, POLLUTANT_MAP[selectedPollutant].name]}
+                                            labelFormatter={(label) => `Hora: ${label}:00`}
+                                        />
+                                        <Line type="monotone" dataKey="value" name={POLLUTANT_MAP[selectedPollutant].name} stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 7 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
                     ) : (
                         <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para el contaminante seleccionado.</div>
                     )}

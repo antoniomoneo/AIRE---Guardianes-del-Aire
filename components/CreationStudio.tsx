@@ -1,13 +1,5 @@
 
 
-
-
-
-
-
-
-
-
 import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import p5 from 'p5';
 import * as Tone from 'tone';
@@ -187,20 +179,25 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
         }, 50);
 
         return () => {
+            // Capture the specific instance this effect created.
+            const instanceToCleanup = currentP5Instance;
+
+            // 1. Immediately invalidate the ref. Any pending Tone.js Draw callback
+            // that runs after this line will fail its currency check and exit.
+            if (p5InstanceRef.current === instanceToCleanup) {
+                p5InstanceRef.current = null;
+            }
+
+            // 2. Stop all asynchronous sources to prevent new callbacks.
             if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
             if (initialDrawTimeoutId) clearTimeout(initialDrawTimeoutId);
-
             Tone.Transport.stop();
             Tone.Transport.cancel();
             setIsPlaying(false);
-
             resizeObserver.disconnect();
             
-            currentP5Instance.remove();
-            
-            if (p5InstanceRef.current === currentP5Instance) {
-                p5InstanceRef.current = null;
-            }
+            // 3. Forcefully remove the p5 instance and its canvas.
+            instanceToCleanup.remove();
         };
     }, [selectedVizId, visualData]);
 

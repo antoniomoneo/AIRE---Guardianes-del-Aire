@@ -107,20 +107,24 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                     </div>
 
                     <div className="flex-grow p-4 min-h-[400px]">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                                <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: 'NO₂ (µg/m³)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
-                                    labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
-                                />
-                                <Legend />
-                                <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} />
-                                <Line type="monotone" dataKey="simulated" name={scenarioInfo.name} stroke="#f97316" strokeWidth={3} strokeDasharray="5 5" dot={false} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                        <div className="w-full h-full relative">
+                            <div className="absolute inset-0">
+                                 <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
+                                        <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: 'NO₂ (µg/m³)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
+                                            labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
+                                        />
+                                        <Legend />
+                                        <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} />
+                                        <Line type="monotone" dataKey="simulated" name={scenarioInfo.name} stroke="#f97316" strokeWidth={3} strokeDasharray="5 5" dot={false} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
