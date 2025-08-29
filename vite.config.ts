@@ -6,6 +6,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // This configures Vite to serve static assets from the 'media' directory at the project root.
+    // This resolves the 404 errors for images like the logo.
+    publicDir: "media",
     define: {
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
       "process.env.GITHUB_TOKEN": JSON.stringify(env.GITHUB_TOKEN),
