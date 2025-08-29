@@ -285,9 +285,9 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
           <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
         </div>
         
-        <div className="flex-grow grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0 pt-4 overflow-y-auto lg:overflow-y-hidden">
+        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 pt-4">
             {/* --- Left Sidebar --- */}
-            <div className="lg:col-span-1 space-y-6 lg:overflow-y-auto lg:pr-4 pb-4 lg:border-r lg:border-gray-700/50">
+            <div className="order-2 lg:order-1 w-full lg:w-1/4 space-y-6 overflow-y-auto pr-4 pb-4 flex-grow lg:flex-grow-0 min-h-0 lg:border-r lg:border-gray-700/50">
                 <section>
                     <h3 className="text-lg font-orbitron text-purple-100 border-b border-purple-500/20 pb-2 mb-4">Controles Visuales</h3>
                     <div className="space-y-4">
@@ -375,7 +375,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             </div>
 
             {/* --- Right Main Area --- */}
-            <div className="lg:col-span-3 flex flex-col items-center justify-center p-4 min-w-0">
+            <div className="order-1 lg:order-2 w-full lg:w-3/4 flex flex-col items-center justify-center p-4 min-w-0 flex-shrink-0 lg:flex-shrink">
                 <div className="flex items-center justify-start gap-3 px-2 pb-2 w-full">
                     <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
                     <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>
