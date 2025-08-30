@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { GalleryItem } from '../types';
 
@@ -16,32 +17,62 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({ item, onVote, onDelete
         day: 'numeric'
     });
 
+    const renderCardContent = () => {
+        switch (item.type) {
+            case 'insight':
+                return (
+                    <div className="p-4 flex-grow flex flex-col justify-center bg-black/20 min-h-[15rem]">
+                        <div>
+                            <h5 className="font-bold text-gray-400 mb-1 text-sm">Conclusión:</h5>
+                            <blockquote className="border-l-4 border-cyan-500 pl-3 italic text-gray-300 text-sm mb-4">
+                               "{item.conclusion}"
+                            </blockquote>
+                        </div>
+                        <div>
+                             <h5 className="font-bold text-gray-400 mb-1 text-sm">Recomendación:</h5>
+                            <blockquote className="border-l-4 border-yellow-500 pl-3 italic text-gray-300 text-sm">
+                               "{item.recommendation}"
+                            </blockquote>
+                        </div>
+                    </div>
+                );
+            case 'ai-scenario':
+                return (
+                    <div className="p-4 flex-grow flex flex-col justify-center bg-black/20 min-h-[15rem]">
+                        <div>
+                            <h5 className="font-bold text-gray-400 mb-1 text-sm">Escenario del usuario:</h5>
+                            <blockquote className="border-l-4 border-indigo-400 pl-3 italic text-gray-300 text-sm mb-4">
+                               "{item.userPrompt}"
+                            </blockquote>
+                        </div>
+                        <div>
+                             <h5 className="font-bold text-gray-400 mb-1 text-sm">Explicación de la IA:</h5>
+                            <blockquote className="border-l-4 border-green-400 pl-3 italic text-gray-300 text-sm">
+                               "{item.aiExplanation}"
+                            </blockquote>
+                        </div>
+                    </div>
+                );
+            case 'audio-viz':
+                return (
+                    <div className="aspect-square bg-black flex items-center justify-center">
+                        <video src={item.videoDataUrl} controls className="w-full h-full object-cover" />
+                    </div>
+                );
+            case '3d-model':
+                return (
+                    <div className="aspect-square bg-black flex items-center justify-center">
+                        <img src={item.imageDataUrl} alt={item.title} className="w-full h-full object-cover" />
+                    </div>
+                );
+            default:
+                return null;
+        }
+    };
+
     return (
         <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden flex flex-col transition-shadow hover:shadow-lg hover:shadow-cyan-500/10">
-            {item.type === 'insight' ? (
-                <div className="p-4 flex-grow flex flex-col justify-center bg-black/20 min-h-[15rem]">
-                    <div>
-                        <h5 className="font-bold text-gray-400 mb-1 text-sm">Conclusión:</h5>
-                        <blockquote className="border-l-4 border-cyan-500 pl-3 italic text-gray-300 text-sm mb-4">
-                           "{item.conclusion}"
-                        </blockquote>
-                    </div>
-                    <div>
-                         <h5 className="font-bold text-gray-400 mb-1 text-sm">Recomendación:</h5>
-                        <blockquote className="border-l-4 border-yellow-500 pl-3 italic text-gray-300 text-sm">
-                           "{item.recommendation}"
-                        </blockquote>
-                    </div>
-                </div>
-            ) : (
-                <div className="aspect-square bg-black flex items-center justify-center">
-                    {item.type === 'audio-viz' ? (
-                        <video src={item.videoDataUrl} controls className="w-full h-full object-cover" />
-                    ) : (
-                        <img src={item.imageDataUrl} alt={item.title} className="w-full h-full object-cover" />
-                    )}
-                </div>
-            )}
+            {renderCardContent()}
             <div className="p-4 flex flex-col flex-grow">
                 <h4 className="font-orbitron text-lg text-cyan-200 truncate" title={item.title}>{item.title}</h4>
                 <p className="text-sm text-gray-400">Por: <span className="font-semibold text-gray-300">{item.author}</span></p>

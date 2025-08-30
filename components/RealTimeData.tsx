@@ -236,19 +236,10 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
 
         const loadStationLocations = () => {
             try {
-                // Bounding box for Madrid projection (approximate)
-                const bbox = { minLon: -3.8889, maxLon: -3.518, minLat: 40.315, maxLat: 40.5639 };
-                const viewboxSize = 300;
-
                 const locations = stationLocationsGeoJSON.features.map((feature: any) => {
                     const { id_station, nombre } = feature.properties;
                     const [lon, lat] = feature.geometry.coordinates;
-
-                    // Simple linear projection
-                    const x = ((lon - bbox.minLon) / (bbox.maxLon - bbox.minLon)) * viewboxSize;
-                    const y = ((bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat)) * viewboxSize;
-
-                    return { code: String(id_station), name: nombre, x, y };
+                    return { code: String(id_station), name: nombre, lat, lon };
                 });
                 setStationLocations(locations);
             } catch (e) {
@@ -498,7 +489,6 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
                                 <Heatmap 
                                     stationAverages={stationAverages}
                                     stationLocations={stationLocations}
-                                    selectedPollutant={selectedPollutant}
                                 />
                                 :
                                 <div className="flex items-center justify-center h-full text-gray-500">El mapa de calor no está disponible para Dióxido de Azufre (SO₂).</div>

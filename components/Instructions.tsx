@@ -1,5 +1,6 @@
 
 
+
 import React, { useEffect } from 'react';
 
 interface InstructionsProps {
@@ -50,6 +51,7 @@ export const Instructions: React.FC<InstructionsProps> = ({ onClose, userName })
                      <p>Gana puntos para subir en el <span className="font-bold text-green-400">Ranking</span> y demostrar tu compromiso como Guardián o Guardiana del Aire:</p>
                     <ul className="list-disc list-inside space-y-3 pl-4">
                         <li><span className="font-bold text-white">500 Puntos:</span> Publica un análisis (conclusión y recomendación) desde el Panel de Control. ¡Es la acción más valiosa!</li>
+                        <li><span className="font-bold text-white">500 Puntos:</span> Publica un escenario generado con IA desde el Laboratorio de Escenarios.</li>
                          <li><span className="font-bold text-white">200 Puntos:</span> Completa el viaje narrativo con A.I.R.E. ("Simulador Data Story") por primera vez.</li>
                         <li><span className="font-bold text-white">100 Puntos:</span> Publica una creación desde el Audio & Viz Studio.</li>
                         <li><span className="font-bold text-white">100 Puntos:</span> Publica un modelo 3D desde el 3D Studio.</li>

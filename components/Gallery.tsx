@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { GalleryItem } from '../types';
 import { getGalleryItems, deleteGalleryItem, voteForItem, hasVotedForItem } from '../utils/galleryService';
@@ -10,7 +11,7 @@ interface GalleryProps {
 
 export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
     const [items, setItems] = useState<GalleryItem[]>([]);
-    const [activeTab, setActiveTab] = useState<'audio-viz' | '3d-model' | 'insight'>('insight');
+    const [activeTab, setActiveTab] = useState<'audio-viz' | '3d-model' | 'insight' | 'ai-scenario'>('insight');
     const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -87,7 +88,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
         return items.filter(item => item.type === activeTab);
     }, [items, activeTab]);
 
-    const TabButton: React.FC<{ type: 'audio-viz' | '3d-model' | 'insight', label: string }> = ({ type, label }) => (
+    const TabButton: React.FC<{ type: 'audio-viz' | '3d-model' | 'insight' | 'ai-scenario', label: string }> = ({ type, label }) => (
         <button
             onClick={() => setActiveTab(type)}
             className={`flex-1 p-3 text-center font-orbitron text-sm sm:text-base transition-colors rounded-t-lg ${
@@ -108,6 +109,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
 
                 <div className="flex-shrink-0 flex border-b-2 border-gray-800">
                     <TabButton type="insight" label="Análisis" />
+                    <TabButton type="ai-scenario" label="Escenarios IA" />
                     <TabButton type="audio-viz" label="Audio & Viz" />
                     <TabButton type="3d-model" label="Modelos 3D" />
                 </div>

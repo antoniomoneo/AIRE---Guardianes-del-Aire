@@ -1,4 +1,6 @@
 
+
+
 import type { ReactNode } from 'react';
 import type p5 from 'p5';
 import type * as THREE from 'three';
@@ -136,7 +138,7 @@ export interface GalleryItemBase {
     title: string;
     createdAt: string; // ISO date string
     votes: number;
-    type: 'audio-viz' | '3d-model' | 'insight';
+    type: 'audio-viz' | '3d-model' | 'insight' | 'ai-scenario';
 }
 
 export interface AudioVizGalleryItem extends GalleryItemBase {
@@ -176,7 +178,18 @@ export interface InsightGalleryItem extends GalleryItemBase {
     }
 }
 
-export type GalleryItem = AudioVizGalleryItem | Model3DGalleryItem | InsightGalleryItem;
+export interface AIScenarioGalleryItem extends GalleryItemBase {
+    type: 'ai-scenario';
+    userPrompt: string;
+    aiExplanation: string;
+    config: {
+        pollutant: Pollutant;
+        historicalData: DashboardDataPoint[];
+        simulatedData: DashboardDataPoint[];
+    };
+}
+
+export type GalleryItem = AudioVizGalleryItem | Model3DGalleryItem | InsightGalleryItem | AIScenarioGalleryItem;
 
 // --- Ranking/Scoring Types ---
 export interface User {
@@ -188,8 +201,8 @@ export interface User {
 export interface StationLocation {
   code: string;
   name: string;
-  x: number; // projected x
-  y: number; // projected y
+  lat: number;
+  lon: number;
 }
 
 export interface StationDailyAverage {

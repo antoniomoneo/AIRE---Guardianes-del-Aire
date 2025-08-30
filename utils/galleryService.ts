@@ -1,7 +1,8 @@
 
 
+
 import { v4 as uuidv4 } from 'uuid';
-import type { GalleryItem, AudioVizGalleryItem, Model3DGalleryItem, InsightGalleryItem } from '../types';
+import type { GalleryItem, AudioVizGalleryItem, Model3DGalleryItem, InsightGalleryItem, AIScenarioGalleryItem } from '../types';
 import { awardPoints } from './scoringService';
 
 const VOTED_KEY_PREFIX = 'aire_gallery_voted_';
@@ -18,6 +19,7 @@ const FOLDER_MAP: Record<GalleryItem['type'], string> = {
     'insight': 'insights',
     'audio-viz': 'audio-viz',
     '3d-model': '3d-models',
+    'ai-scenario': 'ai-scenarios',
 };
 
 // Helper for GitHub API requests
@@ -115,7 +117,7 @@ export const getGalleryItems = async (): Promise<GalleryItem[]> => {
     }
 };
 
-export const addGalleryItem = async (itemData: Omit<AudioVizGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<Model3DGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<InsightGalleryItem, 'id' | 'createdAt' | 'votes'>): Promise<void> => {
+export const addGalleryItem = async (itemData: Omit<AudioVizGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<Model3DGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<InsightGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<AIScenarioGalleryItem, 'id' | 'createdAt' | 'votes'>): Promise<void> => {
     if (!GITHUB_TOKEN) {
         throw new Error('No se puede publicar. El token de GitHub no está configurado en el entorno de la aplicación.');
     }

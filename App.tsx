@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Scene } from './components/Scene';
 import { useAirQualityData } from './hooks/useAirQualityData';
@@ -286,7 +287,7 @@ const App: React.FC = () => {
       )}
 
       {isAiAssistantOpen && data && (
-        <AiAssistantModal data={data} onClose={() => setIsAiAssistantOpen(false)} userName={userName} />
+        <AiAssistant data={data} onClose={() => setIsAiAssistantOpen(false)} userName={userName} />
       )}
     </main>
   );
@@ -347,7 +348,7 @@ const DataStory: React.FC<{data: any, onClose: () => void, isNarrationEnabled: b
     )
 }
 
-const AiAssistantModal: React.FC<{data: any, onClose: () => void, userName: string}> = ({ data, onClose, userName }) => {
+const AiAssistant: React.FC<{data: any, onClose: () => void, userName: string}> = ({ data, onClose, userName }) => {
     const [chatKey, setChatKey] = useState(0);
 
     return (

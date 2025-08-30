@@ -1,5 +1,6 @@
 
 
+
 import React, { useEffect } from 'react';
 
 interface AppsLandingPageProps {
@@ -61,7 +62,7 @@ const apps = [
         icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2-2H4a2 2 0 01-2-2v-4z" /></svg>,
         action: 'onOpenDigitalTwinLab',
         color: 'border-indigo-500/50 hover:border-indigo-400 hover:shadow-indigo-500/20',
-        points: 100,
+        points: 500,
     },
     {
         title: "Audio & Viz Studio",
