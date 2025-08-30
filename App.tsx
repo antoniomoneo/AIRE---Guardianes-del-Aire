@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Scene } from './components/Scene';
 import { useAirQualityData } from './hooks/useAirQualityData';
@@ -276,8 +277,8 @@ const App: React.FC = () => {
         />
       )}
 
-      {isRealTimeDataOpen && (
-        <RealTimeData onClose={() => setIsRealTimeDataOpen(false)} userName={userName}/>
+      {isRealTimeDataOpen && data && (
+        <RealTimeData onClose={() => setIsRealTimeDataOpen(false)} userName={userName} historicalData={data} />
       )}
 
       {isDigitalTwinLabOpen && data && (

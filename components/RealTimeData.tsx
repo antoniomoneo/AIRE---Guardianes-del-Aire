@@ -1,15 +1,19 @@
 
+
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label } from 'recharts';
 import { awardPoints } from '../utils/scoringService';
+import type { AirQualityRecord } from '../types';
+import { Pollutant } from '../types';
 
 interface RealTimeDataProps {
   onClose: () => void;
   userName: string;
+  historicalData: AirQualityRecord[];
 }
 
 // Using a CORS proxy to prevent browser-side fetch errors.
-const DATASET_URL = "https://corsproxy.io/?https%3A%2F%2Fstorage.googleapis.com%2Faire-470107-datasets-usw1%2Fcalair%2Flatest.flat.csv";
+const DATASET_URL = "https://corsproxy.io/?https%3A%2F%2Fraw.githubusercontent.com%2Fantoniomoneo%2FDatasets%2Frefs%2Fheads%2Fmain%2Fdata%2Fcalair%2Flatest.flat.csv";
 
 const POLLUTANT_MAP: Record<string, { name: string }> = {
     '1': { name: 'Dióxido de Azufre (SO₂)' },
@@ -20,6 +24,14 @@ const POLLUTANT_MAP: Record<string, { name: string }> = {
 };
 type PollutantCode = keyof typeof POLLUTANT_MAP;
 
+const POLLUTANT_CODE_TO_KEY_MAP: Record<PollutantCode, Pollutant> = {
+    '1': Pollutant.SO2,
+    '8': Pollutant.NO2,
+    '9': Pollutant.PM2_5,
+    '10': Pollutant.PM10,
+    '14': Pollutant.O3,
+};
+
 interface HourlyData {
     hour: number;
     value: number;
@@ -27,11 +39,25 @@ interface HourlyData {
 
 type ParsedData = { data: Record<PollutantCode, Record<number, number[]>>, date: Date | null };
 
-const parseFlatCsv = (csvText: string): ParsedData => {
+const parseCsvData = (csvText: string): ParsedData => {
     const lines = csvText.trim().split('\n');
     const headerLine = lines.shift();
     if (!headerLine) return { data: {}, date: null };
+
     const header = headerLine.split(',').map(h => h.trim());
+
+    const colMap: Record<string, number> = header.reduce((acc, col, idx) => {
+        acc[col] = idx;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const requiredCols = ['MAGNITUD', 'ANO', 'MES', 'DIA', 'Hora', 'Valor', 'Validacion'];
+    for (const col of requiredCols) {
+        if (colMap[col] === undefined) {
+            console.error(`La columna requerida '${col}' no se encuentra en el fichero CSV.`);
+            return { data: {}, date: null };
+        }
+    }
 
     const data: Record<PollutantCode, Record<number, number[]>> = {};
     let fileDate: Date | null = null;
@@ -39,33 +65,32 @@ const parseFlatCsv = (csvText: string): ParsedData => {
     lines.forEach(line => {
         if (!line.trim()) return;
         const values = line.split(',');
-        const row = header.reduce((obj, nextKey, index) => {
-            obj[nextKey] = values[index];
-            return obj;
-        }, {} as Record<string, string>);
+        if (values.length < header.length) return;
 
-        if (!fileDate && row['ano'] && row['mes'] && row['dia']) {
-            const year = parseInt(row['ano']);
-            const month = parseInt(row['mes']) - 1; // Date month is 0-indexed
-            const day = parseInt(row['dia']);
+        const validacion = values[colMap['Validacion']]?.trim().replace(/"/g, '');
+        if (validacion !== 'V') return;
+
+        const pollutantCode = values[colMap['MAGNITUD']]?.trim().replace(/"/g, '') as PollutantCode;
+        if (!POLLUTANT_MAP[pollutantCode]) return;
+
+        const horaStr = values[colMap['Hora']]?.trim().replace(/"/g, '');
+        const valorStr = values[colMap['Valor']]?.trim().replace(/"/g, '');
+
+        const hora = parseInt(horaStr, 10);
+        const valor = parseFloat(valorStr);
+
+        if (isNaN(hora) || isNaN(valor) || hora < 0 || hora > 24) return;
+
+        if (!data[pollutantCode]) data[pollutantCode] = {};
+        if (!data[pollutantCode][hora]) data[pollutantCode][hora] = [];
+        data[pollutantCode][hora].push(valor);
+
+        if (!fileDate) {
+            const year = parseInt(values[colMap['ANO']]?.trim().replace(/"/g, ''));
+            const month = parseInt(values[colMap['MES']]?.trim().replace(/"/g, '')) - 1;
+            const day = parseInt(values[colMap['DIA']]?.trim().replace(/"/g, ''));
             if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
                 fileDate = new Date(year, month, day);
-            }
-        }
-        
-        const pollutantCode = row['magnitud'] as PollutantCode;
-        if (!POLLUTANT_MAP[pollutantCode]) return;
-        if (!data[pollutantCode]) data[pollutantCode] = {};
-
-        for (let i = 1; i <= 24; i++) {
-            const hourKey = `h${String(i).padStart(2, '0')}`;
-            const validationKey = `v${String(i).padStart(2, '0')}`;
-            if (row[validationKey] === 'V' && row[hourKey]) {
-                const value = parseFloat(row[hourKey]);
-                if (!isNaN(value)) {
-                    if (!data[pollutantCode][i]) data[pollutantCode][i] = [];
-                    data[pollutantCode][i].push(value);
-                }
             }
         }
     });
@@ -73,7 +98,8 @@ const parseFlatCsv = (csvText: string): ParsedData => {
     return { data, date: fileDate };
 };
 
-export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName }) => {
+
+export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, historicalData }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [parsedData, setParsedData] = useState<ParsedData | null>(null);
@@ -128,7 +154,7 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
                 if (!csvText) {
                     throw new Error('El archivo de datos está vacío.');
                 }
-                const data = parseFlatCsv(csvText);
+                const data = parseCsvData(csvText);
                 setParsedData(data);
             } catch (e) {
                 if (e instanceof Error) {
@@ -159,6 +185,44 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
         }).sort((a,b) => a.hour - b.hour);
     }, [parsedData, selectedPollutant]);
     
+     const { overallAverage, last5YearsAverage } = useMemo(() => {
+        const pollutantKey = POLLUTANT_CODE_TO_KEY_MAP[selectedPollutant];
+        if (!historicalData || historicalData.length === 0 || !pollutantKey) {
+            return { overallAverage: undefined, last5YearsAverage: undefined };
+        }
+
+        let totalSum = 0;
+        let totalCount = 0;
+        historicalData.forEach(record => {
+            const value = record[pollutantKey] as number | null;
+            if (value !== null && !isNaN(value)) {
+                totalSum += value;
+                totalCount++;
+            }
+        });
+        const overallAvg = totalCount > 0 ? totalSum / totalCount : undefined;
+
+        const maxYear = Math.max(...historicalData.map(d => d.ANO));
+        const startYearForAvg = maxYear - 4;
+        const last5YearsData = historicalData.filter(d => d.ANO >= startYearForAvg);
+        
+        let last5Sum = 0;
+        let last5Count = 0;
+        last5YearsData.forEach(record => {
+            const value = record[pollutantKey] as number | null;
+            if (value !== null && !isNaN(value)) {
+                last5Sum += value;
+                last5Count++;
+            }
+        });
+        const last5Avg = last5Count > 0 ? last5Sum / last5Count : undefined;
+
+        return { 
+            overallAverage: overallAvg, 
+            last5YearsAverage: last5Avg 
+        };
+    }, [historicalData, selectedPollutant]);
+
     const formattedDate = useMemo(() => {
         if (!parsedData?.date) return 'ayer';
         return parsedData.date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -214,6 +278,16 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
                                     labelFormatter={(label) => `Hora: ${label}:00`}
                                 />
                                 <Line type="monotone" dataKey="value" name={POLLUTANT_MAP[selectedPollutant].name} stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 7 }} />
+                                {overallAverage !== undefined && (
+                                <ReferenceLine y={overallAverage} stroke="#f97316" strokeDasharray="4 4">
+                                    <Label value={`Media Histórica (${overallAverage.toFixed(1)})`} position="insideTopLeft" fill="#f97316" fontSize={12} dy={5}/>
+                                </ReferenceLine>
+                                )}
+                                {last5YearsAverage !== undefined && (
+                                <ReferenceLine y={last5YearsAverage} stroke="#eab308" strokeDasharray="4 4">
+                                    <Label value={`Media 5 Años (${last5YearsAverage.toFixed(1)})`} position="insideTopRight" fill="#eab308" fontSize={12} dy={5}/>
+                                </ReferenceLine>
+                                )}
                             </LineChart>
                         ) : (
                             <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para el contaminante seleccionado.</div>

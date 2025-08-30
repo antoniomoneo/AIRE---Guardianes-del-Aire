@@ -1,14 +1,17 @@
 
+
 import React, { useRef, useState, useLayoutEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, Label } from 'recharts';
 import type { DashboardDataPoint } from '../types';
 
 interface DashboardChartProps {
   data: DashboardDataPoint[];
   pollutantName: string;
+  overallAverage?: number;
+  last5YearsAverage?: number;
 }
 
-export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantName }) => {
+export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantName, overallAverage, last5YearsAverage }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -87,6 +90,17 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantN
                 />
                 <Legend wrapperStyle={{ color: '#e5e7eb', fontSize: '14px', paddingTop: '20px' }} verticalAlign="top" />
                 <Line type="monotone" dataKey="value" name={pollutantName} stroke="#67e8f9" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
+
+                {overallAverage !== undefined && (
+                <ReferenceLine y={overallAverage} stroke="#f97316" strokeDasharray="4 4">
+                    <Label value={`Media Histórica (${overallAverage.toFixed(1)})`} position="insideTopLeft" fill="#f97316" fontSize={12} dy={5}/>
+                </ReferenceLine>
+                )}
+                {last5YearsAverage !== undefined && (
+                <ReferenceLine y={last5YearsAverage} stroke="#eab308" strokeDasharray="4 4">
+                    <Label value={`Media 5 Años (${last5YearsAverage.toFixed(1)})`} position="insideTopRight" fill="#eab308" fontSize={12} dy={5}/>
+                </ReferenceLine>
+                )}
             </LineChart>
         )}
     </div>

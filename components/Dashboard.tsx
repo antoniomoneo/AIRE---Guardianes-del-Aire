@@ -61,6 +61,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
     })).sort((a,b) => a.date.localeCompare(b.date));
   }, [data, selectedPollutant, aggregation]);
 
+  const { overallAverage, last5YearsAverage } = useMemo(() => {
+    const pollutantKey = selectedPollutant as keyof AirQualityRecord;
+    if (!data || data.length === 0) {
+      return { overallAverage: undefined, last5YearsAverage: undefined };
+    }
+
+    let totalSum = 0;
+    let totalCount = 0;
+    data.forEach(record => {
+      const value = record[pollutantKey] as number | null;
+      if (value !== null && !isNaN(value)) {
+        totalSum += value;
+        totalCount++;
+      }
+    });
+    const overallAvg = totalCount > 0 ? totalSum / totalCount : undefined;
+
+    const maxYear = Math.max(...data.map(d => d.ANO));
+    const startYearForAvg = maxYear - 4;
+    const last5YearsData = data.filter(d => d.ANO >= startYearForAvg);
+    
+    let last5Sum = 0;
+    let last5Count = 0;
+    last5YearsData.forEach(record => {
+        const value = record[pollutantKey] as number | null;
+        if (value !== null && !isNaN(value)) {
+            last5Sum += value;
+            last5Count++;
+        }
+    });
+    const last5Avg = last5Count > 0 ? last5Sum / last5Count : undefined;
+
+    return { 
+        overallAverage: overallAvg, 
+        last5YearsAverage: last5Avg 
+    };
+  }, [data, selectedPollutant]);
+
+
   const handlePublish = async (authorName: string) => {
     setIsPublishing(true);
     try {
@@ -133,7 +172,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
             </div>
 
             <div className="h-[45vh] min-h-[350px]">
-                 <DashboardChart data={chartData} pollutantName={POLLUTANT_NAMES[selectedPollutant]} />
+                 <DashboardChart 
+                    data={chartData} 
+                    pollutantName={POLLUTANT_NAMES[selectedPollutant]} 
+                    overallAverage={overallAverage}
+                    last5YearsAverage={last5YearsAverage}
+                 />
             </div>
 
             <div className="pt-4 border-t border-gray-700 mt-4">
