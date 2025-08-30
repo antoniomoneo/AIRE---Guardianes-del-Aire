@@ -1,10 +1,20 @@
 
 
+
+
+
+
+
+
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label } from 'recharts';
 import { awardPoints } from '../utils/scoringService';
-import type { AirQualityRecord } from '../types';
+import type { AirQualityRecord, StationDailyAverage, StationLocation } from '../types';
 import { Pollutant } from '../types';
+import { calculateAQI } from '../utils/realTimeDataUtils';
+import type { RealTimePollutantCode } from '../utils/realTimeDataUtils';
+import { Heatmap } from './Heatmap';
+import { stationLocationsGeoJSON } from '../data/stationLocations';
 
 interface RealTimeDataProps {
   onClose: () => void;
@@ -15,19 +25,48 @@ interface RealTimeDataProps {
 // Using a CORS proxy to prevent browser-side fetch errors.
 const DATASET_URL = "https://corsproxy.io/?https%3A%2F%2Fraw.githubusercontent.com%2Fantoniomoneo%2FDatasets%2Frefs%2Fheads%2Fmain%2Fdata%2Fcalair%2Flatest.flat.csv";
 
-const POLLUTANT_MAP: Record<string, { name: string }> = {
+
+// FIX: Use 'as const' to infer literal types for keys, making PollutantCode a union of literals instead of string.
+const POLLUTANT_MAP = {
     '1': { name: 'Dióxido de Azufre (SO₂)' },
     '8': { name: 'Dióxido de Nitrógeno (NO₂)' },
     '9': { name: 'Partículas < 2.5µm (PM₂.₅)' },
     '10': { name: 'Partículas < 10µm (PM₁₀)' },
     '14': { name: 'Ozono (O₃)' },
+} as const;
+export type PollutantCode = keyof typeof POLLUTANT_MAP;
+
+const STATION_MAP: Record<string, { name: string }> = {
+    '4': { name: 'Pza. de España' },
+    '8': { name: 'Escuelas Aguirre' },
+    '11': { name: 'Av. Ramón y Cajal' },
+    '16': { name: 'Arturo Soria' },
+    '17': { name: 'Villaverde' },
+    '18': { name: 'Farolillo' },
+    '24': { name: 'Casa de Campo' },
+    '27': { name: 'Barajas Pueblo' },
+    '35': { name: 'Pza. del Carmen' },
+    '36': { name: 'Moratalaz' },
+    '38': { name: 'Cuatro Caminos' },
+    '39': { name: 'Barrio del Pilar' },
+    '40': { name: 'Vallecas' },
+    '47': { name: 'Méndez Álvaro' },
+    '48': { name: 'Pº Castellana' },
+    '49': { name: 'Retiro' },
+    '50': { name: 'Plaza Castilla' },
+    '54': { name: 'Ensanche de Vallecas' },
+    '55': { name: 'Urb. Embajada' },
+    '56': { name: 'Pza. Elíptica' },
+    '57': { name: 'Sanchinarro' },
+    '58': { name: 'El Pardo' },
+    '59': { name: 'Juan Carlos I' },
+    '60': { name: 'Tres Olivos' },
 };
-type PollutantCode = keyof typeof POLLUTANT_MAP;
 
 const POLLUTANT_CODE_TO_KEY_MAP: Record<PollutantCode, Pollutant> = {
     '1': Pollutant.SO2,
     '8': Pollutant.NO2,
-    '9': Pollutant.PM2_5,
+    '9': Pollutant.PM25,
     '10': Pollutant.PM10,
     '14': Pollutant.O3,
 };
@@ -36,13 +75,28 @@ interface HourlyData {
     hour: number;
     value: number;
 }
+interface RealTimeRecord {
+    pollutantCode: PollutantCode;
+    stationCode: string;
+    hour: number;
+    value: number;
+}
 
-type ParsedData = { data: Record<PollutantCode, Record<number, number[]>>, date: Date | null };
+interface Station {
+    code: string;
+    name: string;
+}
+
+type ParsedData = {
+    records: RealTimeRecord[];
+    stations: Station[];
+    date: Date | null;
+};
 
 const parseCsvData = (csvText: string): ParsedData => {
     const lines = csvText.trim().split('\n');
     const headerLine = lines.shift();
-    if (!headerLine) return { data: {}, date: null };
+    if (!headerLine) return { records: [], stations: [], date: null };
 
     const header = headerLine.split(',').map(h => h.trim());
 
@@ -51,16 +105,17 @@ const parseCsvData = (csvText: string): ParsedData => {
         return acc;
     }, {} as Record<string, number>);
 
-    const requiredCols = ['MAGNITUD', 'ANO', 'MES', 'DIA', 'Hora', 'Valor', 'Validacion'];
+    const requiredCols = ['ESTACION', 'MAGNITUD', 'ANO', 'MES', 'DIA', 'Hora', 'Valor', 'Validacion'];
     for (const col of requiredCols) {
         if (colMap[col] === undefined) {
             console.error(`La columna requerida '${col}' no se encuentra en el fichero CSV.`);
-            return { data: {}, date: null };
+            return { records: [], stations: [], date: null };
         }
     }
 
-    const data: Record<PollutantCode, Record<number, number[]>> = {};
+    const records: RealTimeRecord[] = [];
     let fileDate: Date | null = null;
+    const foundStations = new Map<string, string>();
 
     lines.forEach(line => {
         if (!line.trim()) return;
@@ -73,6 +128,9 @@ const parseCsvData = (csvText: string): ParsedData => {
         const pollutantCode = values[colMap['MAGNITUD']]?.trim().replace(/"/g, '') as PollutantCode;
         if (!POLLUTANT_MAP[pollutantCode]) return;
 
+        const stationCode = values[colMap['ESTACION']]?.trim().replace(/"/g, '');
+        if (!STATION_MAP[stationCode]) return;
+
         const horaStr = values[colMap['Hora']]?.trim().replace(/"/g, '');
         const valorStr = values[colMap['Valor']]?.trim().replace(/"/g, '');
 
@@ -80,10 +138,11 @@ const parseCsvData = (csvText: string): ParsedData => {
         const valor = parseFloat(valorStr);
 
         if (isNaN(hora) || isNaN(valor) || hora < 0 || hora > 24) return;
-
-        if (!data[pollutantCode]) data[pollutantCode] = {};
-        if (!data[pollutantCode][hora]) data[pollutantCode][hora] = [];
-        data[pollutantCode][hora].push(valor);
+        
+        records.push({ pollutantCode, stationCode, hour: hora, value: valor });
+        if (!foundStations.has(stationCode)) {
+            foundStations.set(stationCode, STATION_MAP[stationCode].name);
+        }
 
         if (!fileDate) {
             const year = parseInt(values[colMap['ANO']]?.trim().replace(/"/g, ''));
@@ -94,8 +153,12 @@ const parseCsvData = (csvText: string): ParsedData => {
             }
         }
     });
+    
+    const stations = Array.from(foundStations.entries())
+        .map(([code, name]) => ({ code, name }))
+        .sort((a,b) => a.name.localeCompare(b.name));
 
-    return { data, date: fileDate };
+    return { records, stations, date: fileDate };
 };
 
 
@@ -104,6 +167,10 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
     const [error, setError] = useState<string | null>(null);
     const [parsedData, setParsedData] = useState<ParsedData | null>(null);
     const [selectedPollutant, setSelectedPollutant] = useState<PollutantCode>('8');
+    const [selectedStation, setSelectedStation] = useState<string>('all');
+    const [view, setView] = useState<'chart' | 'map'>('chart');
+    const [stationLocations, setStationLocations] = useState<StationLocation[]>([]);
+
     const hasAwardedPoints = useRef(false);
     const [size, setSize] = useState({ width: 0, height: 0 });
     const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -167,7 +234,31 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
             }
         };
 
+        const loadStationLocations = () => {
+            try {
+                // Bounding box for Madrid projection (approximate)
+                const bbox = { minLon: -3.8889, maxLon: -3.518, minLat: 40.315, maxLat: 40.5639 };
+                const viewboxSize = 300;
+
+                const locations = stationLocationsGeoJSON.features.map((feature: any) => {
+                    const { id_station, nombre } = feature.properties;
+                    const [lon, lat] = feature.geometry.coordinates;
+
+                    // Simple linear projection
+                    const x = ((lon - bbox.minLon) / (bbox.maxLon - bbox.minLon)) * viewboxSize;
+                    const y = ((bbox.maxLat - lat) / (bbox.maxLat - bbox.minLat)) * viewboxSize;
+
+                    return { code: String(id_station), name: nombre, x, y };
+                });
+                setStationLocations(locations);
+            } catch (e) {
+                console.error("Failed to process station locations:", e);
+                setError(prev => prev ? `${prev}\nError al procesar ubicaciones.` : 'Error al procesar ubicaciones.');
+            }
+        };
+
         fetchData();
+        loadStationLocations();
 
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
@@ -175,14 +266,66 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
     }, [onClose, userName]);
 
     const chartData = useMemo<HourlyData[] | null>(() => {
-        if (!parsedData || !parsedData.data[selectedPollutant]) return null;
+        if (!parsedData) return null;
+
+        let filteredRecords = parsedData.records.filter(r => r.pollutantCode === selectedPollutant);
+
+        if (selectedStation !== 'all') {
+            filteredRecords = filteredRecords.filter(r => r.stationCode === selectedStation);
+        }
+        if (filteredRecords.length === 0) return null;
+
+        const hourlyAgg: Record<number, { sum: number, count: number }> = {};
+        for(const record of filteredRecords) {
+            if (!hourlyAgg[record.hour]) {
+                hourlyAgg[record.hour] = { sum: 0, count: 0 };
+            }
+            hourlyAgg[record.hour].sum += record.value;
+            hourlyAgg[record.hour].count++;
+        }
         
-        const pollutantData = parsedData.data[selectedPollutant];
-        
-        return Object.entries(pollutantData).map(([hour, values]) => {
-            const avg = values.reduce((sum, v) => sum + v, 0) / values.length;
-            return { hour: parseInt(hour), value: parseFloat(avg.toFixed(2)) };
+        return Object.entries(hourlyAgg).map(([hour, { sum, count }]) => {
+            return { hour: parseInt(hour), value: parseFloat((sum / count).toFixed(2)) };
         }).sort((a,b) => a.hour - b.hour);
+
+    }, [parsedData, selectedPollutant, selectedStation]);
+
+    const dailyAverage = useMemo(() => {
+        if (!chartData || chartData.length === 0) return undefined;
+        const sum = chartData.reduce((acc, curr) => acc + curr.value, 0);
+        return sum / chartData.length;
+    }, [chartData]);
+
+
+    const stationAverages = useMemo<StationDailyAverage[]>(() => {
+        if (!parsedData) return [];
+
+        const recordsForPollutant = parsedData.records.filter(r => r.pollutantCode === selectedPollutant);
+        if (recordsForPollutant.length === 0) return [];
+
+        const avgMap = new Map<string, { sum: number, count: number }>();
+        recordsForPollutant.forEach(record => {
+            if (!avgMap.has(record.stationCode)) {
+                avgMap.set(record.stationCode, { sum: 0, count: 0 });
+            }
+            const current = avgMap.get(record.stationCode)!;
+            current.sum += record.value;
+            current.count++;
+        });
+        
+        const averages: StationDailyAverage[] = [];
+        avgMap.forEach((data, stationCode) => {
+            const avgValue = data.sum / data.count;
+            averages.push({
+                stationCode,
+                value: avgValue,
+                // FIX: The calculateAQI function does not support SO2 ('1').
+                // We'll calculate AQI only for supported pollutants and default to 0 otherwise.
+                aqi: selectedPollutant !== '1' ? calculateAQI(selectedPollutant, avgValue) : 0,
+            });
+        });
+
+        return averages;
     }, [parsedData, selectedPollutant]);
     
      const { overallAverage, last5YearsAverage } = useMemo(() => {
@@ -227,6 +370,15 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
         if (!parsedData?.date) return 'ayer';
         return parsedData.date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
     }, [parsedData?.date]);
+
+    const subtitle = useMemo(() => {
+        const dateStr = formattedDate;
+        if (selectedStation === 'all' || !parsedData) {
+            return `Media horaria de todas las estaciones para el día ${dateStr}`;
+        }
+        const stationName = parsedData.stations.find(s => s.code === selectedStation)?.name;
+        return `Datos horarios de la estación "${stationName}" para el día ${dateStr}`;
+    }, [formattedDate, selectedStation, parsedData]);
     
     const ControlButton: React.FC<{onClick: () => void, isActive: boolean, children: React.ReactNode}> = ({ onClick, isActive, children }) => (
         <button
@@ -240,6 +392,19 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
             {children}
         </button>
     );
+    
+    const ViewToggleButton: React.FC<{onClick: () => void, isActive: boolean, children: React.ReactNode}> = ({ onClick, isActive, children }) => (
+        <button
+            onClick={onClick}
+            className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 border-2 ${
+                isActive
+                ? 'bg-gray-200 border-gray-100 text-gray-900'
+                : 'bg-gray-700/50 border-gray-600 hover:border-gray-200 text-gray-300'
+            }`}
+        >
+            {children}
+        </button>
+    );
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -247,53 +412,97 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
                 <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700 flex-shrink-0">
                     <div>
                         <h2 className="text-xl sm:text-2xl font-orbitron text-red-300">Datos de Calidad del Aire</h2>
-                        <p className="text-sm text-gray-400">Media horaria de todas las estaciones para el día {formattedDate}</p>
+                        <p className="text-sm text-gray-400">{view === 'chart' ? subtitle : `Mapa de calor para ${POLLUTANT_MAP[selectedPollutant].name} el ${formattedDate}`}</p>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
+                    <div className="flex items-center gap-2">
+                        <ViewToggleButton onClick={() => setView('chart')} isActive={view === 'chart'}>Gráfico</ViewToggleButton>
+                        <ViewToggleButton onClick={() => setView('map')} isActive={view === 'map'}>Mapa</ViewToggleButton>
+                        <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none ml-4" aria-label="Cerrar">&times;</button>
+                    </div>
                 </div>
                 
-                <div className="flex flex-wrap gap-2 mb-4">
-                    {Object.entries(POLLUTANT_MAP).map(([code, {name}]) => (
-                        <ControlButton key={code} onClick={() => setSelectedPollutant(code as PollutantCode)} isActive={selectedPollutant === code}>
-                            {name}
-                        </ControlButton>
-                    ))}
+                <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                    <div>
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Contaminante</h3>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.entries(POLLUTANT_MAP).map(([code, {name}]) => (
+                                <ControlButton key={code} onClick={() => setSelectedPollutant(code as PollutantCode)} isActive={selectedPollutant === code}>
+                                    {name.match(/\(([^)]+)\)/)?.[1] || name}
+                                </ControlButton>
+                            ))}
+                        </div>
+                    </div>
+                    {view === 'chart' && !loading && parsedData && parsedData.stations.length > 0 && (
+                        <div>
+                             <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Estación</h3>
+                             <select
+                                id="station-select"
+                                value={selectedStation}
+                                onChange={e => setSelectedStation(e.target.value)}
+                                className="p-2 bg-gray-700/50 border-2 border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-red-400 h-full w-full sm:w-auto"
+                            >
+                                <option value="all">Todas (Media)</option>
+                                {parsedData.stations.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                            </select>
+                        </div>
+                     )}
                 </div>
+
 
                 <div className="flex-grow min-h-0" ref={chartContainerRef}>
                     {loading ? (
                         <div className="flex items-center justify-center h-full text-gray-400">Cargando datos...</div>
                     ) : error ? (
                         <div className="flex items-center justify-center h-full text-center text-red-400">{error}</div>
-                    ) : (size.width > 0 && size.height > 0) ? (
-                         chartData && chartData.length > 0 ? (
-                            <LineChart width={size.width} height={size.height} data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="hour" stroke="#9ca3af" tick={{ fontSize: 12 }} label={{ value: 'Hora del día', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}/>
-                                <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={['auto', 'auto']} label={{ value: 'µg/m³', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#f87171' }}
-                                    labelStyle={{ color: '#fca5a5', fontWeight: 'bold' }}
-                                    formatter={(value: number) => [value, POLLUTANT_MAP[selectedPollutant].name]}
-                                    labelFormatter={(label) => `Hora: ${label}:00`}
-                                />
-                                <Line type="monotone" dataKey="value" name={POLLUTANT_MAP[selectedPollutant].name} stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 7 }} />
-                                {overallAverage !== undefined && (
-                                <ReferenceLine y={overallAverage} stroke="#f97316" strokeDasharray="4 4">
-                                    <Label value={`Media Histórica (${overallAverage.toFixed(1)})`} position="insideTopLeft" fill="#f97316" fontSize={12} dy={5}/>
-                                </ReferenceLine>
-                                )}
-                                {last5YearsAverage !== undefined && (
-                                <ReferenceLine y={last5YearsAverage} stroke="#eab308" strokeDasharray="4 4">
-                                    <Label value={`Media 5 Años (${last5YearsAverage.toFixed(1)})`} position="insideTopRight" fill="#eab308" fontSize={12} dy={5}/>
-                                </ReferenceLine>
-                                )}
-                            </LineChart>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para el contaminante seleccionado.</div>
-                        )
                     ) : (
-                        <div className="flex items-center justify-center h-full text-gray-400">Cargando gráfico...</div>
+                        view === 'chart' ? (
+                            (size.width > 0 && size.height > 0) ? (
+                                chartData && chartData.length > 0 ? (
+                                    <LineChart width={size.width} height={size.height} data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis dataKey="hour" stroke="#9ca3af" tick={{ fontSize: 12 }} label={{ value: 'Hora del día', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}/>
+                                        <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={['auto', 'auto']} label={{ value: 'µg/m³', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#f87171' }}
+                                            labelStyle={{ color: '#fca5a5', fontWeight: 'bold' }}
+                                            formatter={(value: number) => [value, POLLUTANT_MAP[selectedPollutant].name]}
+                                            labelFormatter={(label) => `Hora: ${label}:00`}
+                                        />
+                                        <Line type="monotone" dataKey="value" name={POLLUTANT_MAP[selectedPollutant].name} stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 7 }} />
+                                        {overallAverage !== undefined && (
+                                        <ReferenceLine y={overallAverage} stroke="#f97316" strokeDasharray="4 4">
+                                            <Label value={`Media Histórica (${overallAverage.toFixed(1)})`} position="insideTopLeft" fill="#f97316" fontSize={12} dy={5}/>
+                                        </ReferenceLine>
+                                        )}
+                                        {last5YearsAverage !== undefined && (
+                                        <ReferenceLine y={last5YearsAverage} stroke="#eab308" strokeDasharray="4 4">
+                                            <Label value={`Media 5 Años (${last5YearsAverage.toFixed(1)})`} position="insideTopRight" fill="#eab308" fontSize={12} dy={5}/>
+                                        </ReferenceLine>
+                                        )}
+                                        {dailyAverage !== undefined && (
+                                        <ReferenceLine y={dailyAverage} stroke="#a78bfa" strokeDasharray="4 4">
+                                            <Label value={`Media del Día (${dailyAverage.toFixed(1)})`} position="insideTop" fill="#a78bfa" fontSize={12} dy={5}/>
+                                        </ReferenceLine>
+                                        )}
+                                    </LineChart>
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para la selección actual.</div>
+                                )
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-gray-400">Cargando gráfico...</div>
+                            )
+                        ) : ( // Map View
+                            // FIX: The Heatmap component does not support SO2 ('1'), as it relies on AQI.
+                            // We show a message instead of rendering the map for this pollutant.
+                            selectedPollutant !== '1' ?
+                                <Heatmap 
+                                    stationAverages={stationAverages}
+                                    stationLocations={stationLocations}
+                                    selectedPollutant={selectedPollutant}
+                                />
+                                :
+                                <div className="flex items-center justify-center h-full text-gray-500">El mapa de calor no está disponible para Dióxido de Azufre (SO₂).</div>
+                        )
                     )}
                 </div>
             </div>

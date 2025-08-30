@@ -1,8 +1,9 @@
 
+
 // Pollutant codes used by the Madrid City Council API
 export const POLLUTANT_INFO = {
     '8': { name: 'Dióxido de Nitrógeno (NO₂)', code: 'NO2' },
-    '9': { name: 'Partículas < 2.5 µm (PM₂.₅)', code: 'PM2_5' },
+    '9': { name: 'Partículas < 2.5 µm (PM₂.₅)', code: 'PM25' },
     '10': { name: 'Partículas < 10 µm (PM₁₀)', code: 'PM10' },
     '14': { name: 'Ozono (O₃)', code: 'O3' },
 };
@@ -24,7 +25,7 @@ const BREAKPOINTS: Record<string, number[]> = {
     'NO2': [40, 90, 120, 230, 340, 1000], 
     'O3':  [50, 100, 130, 240, 380, 800],
     'PM10': [20, 40, 50, 100, 150, 1200],
-    'PM2_5': [10, 20, 25, 50, 75, 800],
+    'PM25': [10, 20, 25, 50, 75, 800],
 };
 
 

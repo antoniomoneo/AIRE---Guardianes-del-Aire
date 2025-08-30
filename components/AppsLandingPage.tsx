@@ -1,4 +1,5 @@
 
+
 import React, { useEffect } from 'react';
 
 interface AppsLandingPageProps {
@@ -30,12 +31,12 @@ const apps = [
         color: 'border-yellow-500/50 hover:border-yellow-400 hover:shadow-yellow-500/20',
         points: 200,
     },
-     {
-        title: "Laboratorio de Escenarios",
-        description: "Explora futuros alternativos y simula el impacto de decisiones clave.",
-        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2-2H4a2 2 0 01-2-2v-4z" /></svg>,
-        action: 'onOpenDigitalTwinLab',
-        color: 'border-indigo-500/50 hover:border-indigo-400 hover:shadow-indigo-500/20',
+    {
+        title: "Glosario",
+        description: "Define los términos técnicos y los distintos contaminantes.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4a2 2 0 012 2v2h4a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V8a2 2 0 00-2-2H4V4z" clipRule="evenodd" /></svg>,
+        action: 'onOpenGlossary',
+        color: 'border-blue-500/50 hover:border-blue-400 hover:shadow-blue-500/20',
         points: 100,
     },
     {
@@ -45,6 +46,22 @@ const apps = [
         action: 'onOpenDashboard',
         color: 'border-cyan-500/50 hover:border-cyan-400 hover:shadow-cyan-500/20',
         points: 500,
+    },
+    {
+        title: "Datos de Ayer",
+        description: "Consulta los datos horarios de los principales contaminantes del último día registrado.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" /></svg>,
+        action: 'onOpenRealTimeData',
+        color: 'border-red-500/50 hover:border-red-400 hover:shadow-red-500/20',
+        points: 300,
+    },
+    {
+        title: "Laboratorio de Escenarios",
+        description: "Explora futuros alternativos y simula el impacto de decisiones clave.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2-2H4a2 2 0 01-2-2v-4z" /></svg>,
+        action: 'onOpenDigitalTwinLab',
+        color: 'border-indigo-500/50 hover:border-indigo-400 hover:shadow-indigo-500/20',
+        points: 100,
     },
     {
         title: "Audio & Viz Studio",
@@ -63,28 +80,12 @@ const apps = [
         points: 100,
     },
     {
-        title: "Datos de Ayer",
-        description: "Consulta los datos horarios de los principales contaminantes del último día registrado.",
-        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.414-1.415L11 9.586V6z" clipRule="evenodd" /></svg>,
-        action: 'onOpenRealTimeData',
-        color: 'border-red-500/50 hover:border-red-400 hover:shadow-red-500/20',
-        points: 300,
-    },
-    {
         title: "Pack Educativo",
         description: "Guía de uso para educadores con actividades para la clase.",
         icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3.5a1 1 0 00.028 1.838l7 3.5a1 1 0 00.732 0l7-3.5a1 1 0 00.028-1.838l-7-3.5zM3 9.42l7 3.5 7-3.5v3.562l-7 3.5-7-3.5V9.42z" /></svg>,
         action: 'onOpenEducationalPack',
         color: 'border-teal-500/50 hover:border-teal-400 hover:shadow-teal-500/20',
         points: 200,
-    },
-    {
-        title: "Glosario",
-        description: "Define los términos técnicos y los distintos contaminantes.",
-        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4a2 2 0 012 2v2h4a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V8a2 2 0 00-2-2H4V4z" clipRule="evenodd" /></svg>,
-        action: 'onOpenGlossary',
-        color: 'border-blue-500/50 hover:border-blue-400 hover:shadow-blue-500/20',
-        points: 100,
     }
 ];
 

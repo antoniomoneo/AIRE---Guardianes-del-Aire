@@ -47,7 +47,7 @@ export interface AirQualityRecord {
   ANO: number;
   ESTACION: number;
   NO2: number | null;
-  PM2_5: number | null;
+  PM25: number | null;
   PM10: number | null;
   O3: number | null;
   SO2: number | null;
@@ -57,7 +57,7 @@ export type ProcessedData = { year: number; NO2: number }[];
 
 export enum Pollutant {
   NO2 = 'NO2',
-  PM2_5 = 'PM2_5',
+  PM25 = 'PM25',
   PM10 = 'PM10',
   O3 = 'O3',
   SO2 = 'SO2',
@@ -182,4 +182,18 @@ export type GalleryItem = AudioVizGalleryItem | Model3DGalleryItem | InsightGall
 export interface User {
     name: string;
     score: number;
+}
+
+// --- Real Time Data Types ---
+export interface StationLocation {
+  code: string;
+  name: string;
+  x: number; // projected x
+  y: number; // projected y
+}
+
+export interface StationDailyAverage {
+    stationCode: string;
+    value: number;
+    aqi: number;
 }

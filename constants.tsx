@@ -6,7 +6,7 @@ import { AIR_QUALITY_REPORT_TEXT } from './data/report';
 
 export const POLLUTANT_NAMES: Record<Pollutant, string> = {
   [Pollutant.NO2]: "Dióxido de Nitrógeno (NO₂)",
-  [Pollutant.PM2_5]: "Partículas < 2.5µm (PM₂.₅)",
+  [Pollutant.PM25]: "Partículas < 2.5µm (PM₂.₅)",
   [Pollutant.PM10]: "Partículas < 10µm (PM₁₀)",
   [Pollutant.O3]: "Ozono (O₃)",
   [Pollutant.SO2]: "Dióxido de Azufre (SO₂)",
@@ -57,7 +57,7 @@ export const SCENES: SceneData[] = [
   {
     id: 3,
     title: "2008-2010: La Crisis y el Primer Respiro",
-    backgroundImage: "https://images.unsplash.com/photo-1582239489254-47176a7e286c?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    backgroundImage: "https://images.unsplash.com/photo-1582239489254-47176a7e286c?q=80&w=1974&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     videoBackground: "https://videos.pexels.com/video-files/7578278/7578278-hd_1920_1080_25fps.mp4",
     startYear: 2001,
     endYear: 2010,
@@ -83,7 +83,7 @@ export const SCENES: SceneData[] = [
     {
     id: 4,
     title: "2015-2019: Madrid Central, una Medida Valiente",
-    backgroundImage: "https://images.unsplash.com/photo-1578328334237-6d1ad1e3f421?q=80&w=2071&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    backgroundImage: "https://images.unsplash.com/photo-1578328334237-6d1ad1e3f421?q=80&w=2071&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     videoBackground: "https://videos.pexels.com/video-files/3058097/3058097-hd_1920_1080_25fps.mp4",
     startYear: 2011,
     endYear: 2019,
@@ -109,7 +109,7 @@ export const SCENES: SceneData[] = [
   {
     id: 5,
     title: "2020: El Mundo se Detiene",
-    backgroundImage: "https://images.unsplash.com/photo-1585252422039-44f25f14e5a2?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    backgroundImage: "https://images.unsplash.com/photo-1585252422039-44f25f14e5a2?q=80&w=2070&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     videoBackground: "https://videos.pexels.com/video-files/4060846/4060846-hd_1920_1080_25fps.mp4",
     startYear: 2015,
     endYear: 2020,
@@ -135,7 +135,7 @@ export const SCENES: SceneData[] = [
   {
     id: 6,
     title: "2021-2024: Hacia un Futuro Sostenible",
-    backgroundImage: "https://images.unsplash.com/photo-1620649197304-837a34615967?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    backgroundImage: "https://images.unsplash.com/photo-1620649197304-837a34615967?q=80&w=2070&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     videoBackground: "https://videos.pexels.com/video-files/4388915/4388915-uhd_3840_2160_25fps.mp4",
     startYear: 2001,
     endYear: 2024,
@@ -163,7 +163,7 @@ export const SCENES: SceneData[] = [
   {
     id: 7,
     title: "Tu Misión Continúa",
-    backgroundImage: "https://images.unsplash.com/photo-1593859982869-09f1e1419a4a?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    backgroundImage: "https://images.unsplash.com/photo-1593859982869-09f1e1419a4a?q=80&w=2070&auto=format&fit=crop&ixlib-rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
     videoBackground: "https://videos.pexels.com/video-files/3843336/3843336-hd_1920_1080_25fps.mp4",
     dialogues: [
        { character: Character.AIRE, text: "Has completado tu viaje por la historia del aire de Madrid. Has visto cómo las decisiones, las crisis y la tecnología han moldeado el aire que respiramos." },

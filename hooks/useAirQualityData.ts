@@ -5,7 +5,7 @@ import { rawCsvData } from '../data/airQualityData';
 
 const POLLUTANT_MAP: { [key: string]: Pollutant } = {
     'Dióxido de Nitrógeno': PollutantEnum.NO2,
-    'Partículas < 2.5 µm': PollutantEnum.PM2_5,
+    'Partículas < 2.5 µm': PollutantEnum.PM25,
     'Partículas < 10 µm': PollutantEnum.PM10,
     'Ozono': PollutantEnum.O3,
     'Dióxido de Azufre': PollutantEnum.SO2,
@@ -43,7 +43,7 @@ const parseAggregatedCSV = (csvText: string): AirQualityRecord[] => {
                 MES: month,
                 ESTACION: 0, // Use a dummy station ID as data is pre-aggregated
                 NO2: null,
-                PM2_5: null,
+                PM25: null,
                 PM10: null,
                 O3: null,
                 SO2: null,
