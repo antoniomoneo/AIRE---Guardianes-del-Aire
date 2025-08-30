@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { Dialogue } from '../types';
 import { Character } from '../types';

@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { awardPoints } from '../utils/scoringService';
 
 interface RealTimeDataProps {
@@ -79,14 +79,30 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
     const [parsedData, setParsedData] = useState<ParsedData | null>(null);
     const [selectedPollutant, setSelectedPollutant] = useState<PollutantCode>('8');
     const hasAwardedPoints = useRef(false);
-    const [isReady, setIsReady] = useState(false);
+    const [size, setSize] = useState({ width: 0, height: 0 });
     const chartContainerRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        const el = chartContainerRef.current;
-        if (el && el.clientWidth > 0 && el.clientHeight > 0) {
-            setIsReady(true);
-        }
+    useLayoutEffect(() => {
+        const container = chartContainerRef.current;
+        if (!container) return;
+
+        const observer = new ResizeObserver((entries) => {
+          const entry = entries[0];
+          if (entry) {
+            const newWidth = Math.round(entry.contentRect.width);
+            const newHeight = Math.round(entry.contentRect.height);
+            
+            setSize(currentSize => {
+                if (currentSize.width !== newWidth || currentSize.height !== newHeight) {
+                    return { width: newWidth, height: newHeight };
+                }
+                return currentSize;
+            });
+          }
+        });
+
+        observer.observe(container);
+        return () => observer.disconnect();
     }, []);
 
     useEffect(() => {
@@ -185,11 +201,9 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
                         <div className="flex items-center justify-center h-full text-gray-400">Cargando datos...</div>
                     ) : error ? (
                         <div className="flex items-center justify-center h-full text-center text-red-400">{error}</div>
-                    ) : !isReady ? (
-                        <div className="flex items-center justify-center h-full text-gray-400">Cargando gráfico...</div>
-                    ) : chartData && chartData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                    ) : (size.width > 0 && size.height > 0) ? (
+                         chartData && chartData.length > 0 ? (
+                            <LineChart width={size.width} height={size.height} data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                 <XAxis dataKey="hour" stroke="#9ca3af" tick={{ fontSize: 12 }} label={{ value: 'Hora del día', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}/>
                                 <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={['auto', 'auto']} label={{ value: 'µg/m³', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
@@ -201,9 +215,11 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName })
                                 />
                                 <Line type="monotone" dataKey="value" name={POLLUTANT_MAP[selectedPollutant].name} stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 7 }} />
                             </LineChart>
-                        </ResponsiveContainer>
+                        ) : (
+                            <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para el contaminante seleccionado.</div>
+                        )
                     ) : (
-                        <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para el contaminante seleccionado.</div>
+                        <div className="flex items-center justify-center h-full text-gray-400">Cargando gráfico...</div>
                     )}
                 </div>
             </div>

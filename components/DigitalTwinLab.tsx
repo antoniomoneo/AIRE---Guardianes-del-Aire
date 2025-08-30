@@ -1,7 +1,6 @@
 
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import type { AirQualityRecord, DashboardDataPoint } from '../types';
 import { generateSimulation, SCENARIOS } from '../utils/simulationService';
 import type { ScenarioId } from '../utils/simulationService';
@@ -35,16 +34,32 @@ const SCENARIO_JUSTIFICATIONS: Record<ScenarioId, { title: string; justification
 export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, userName }) => {
     const [selectedScenario, setSelectedScenario] = useState<ScenarioId>('NO_MADRID_CENTRAL');
     const hasAwardedPoints = useRef(false);
-    const [isReady, setIsReady] = useState(false);
-    const chartContainerRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [size, setSize] = useState({ width: 0, height: 0 });
 
-    useEffect(() => {
-        const el = chartContainerRef.current;
-        if (el && el.clientWidth > 0 && el.clientHeight > 0) {
-            setIsReady(true);
-        }
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (entry) {
+                const newWidth = Math.round(entry.contentRect.width);
+                const newHeight = Math.round(entry.contentRect.height);
+                
+                setSize(currentSize => {
+                    if (currentSize.width !== newWidth || currentSize.height !== newHeight) {
+                        return { width: newWidth, height: newHeight };
+                    }
+                    return currentSize;
+                });
+            }
+        });
+
+        observer.observe(container);
+        return () => observer.disconnect();
     }, []);
-
+    
     useEffect(() => {
         if (userName && !hasAwardedPoints.current) {
             awardPoints(userName, 100);
@@ -95,7 +110,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
                 </div>
                 
-                <div className="flex flex-col lg:flex-row flex-grow min-h-0">
+                <div className="flex flex-col lg:flex-row flex-1 min-h-0">
                     <div className="lg:w-1/3 xl:w-1/4 p-4 space-y-4 lg:border-r border-gray-700 overflow-y-auto flex-shrink-0">
                         <h3 className="text-lg font-bold text-gray-300">Selecciona un Escenario "Qué hubiera pasado si..."</h3>
                         {Object.entries(SCENARIOS).map(([id, { name }]) => (
@@ -115,26 +130,20 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                         </div>
                     </div>
 
-                    <div className="flex-1 p-4 min-h-0 flex flex-col" ref={chartContainerRef}>
-                        {!isReady ? (
-                            <div className="flex items-center justify-center h-full text-gray-400">Cargando simulador...</div>
-                        ) : (
-                            <div className="flex-grow">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                        <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                                        <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: 'NO₂ (µg/m³)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
-                                        <Tooltip 
-                                            contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
-                                            labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
-                                        />
-                                        <Legend />
-                                        <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} />
-                                        <Line type="monotone" dataKey="simulated" name={scenarioInfo.name} stroke="#f97316" strokeWidth={3} strokeDasharray="5 5" dot={false} />
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
+                    <div ref={containerRef} className="flex-1 p-4 min-h-0 flex flex-col">
+                        {size.width > 0 && size.height > 0 && (
+                            <LineChart width={size.width} height={size.height} data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
+                                <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: 'NO₂ (µg/m³)', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
+                                <Tooltip 
+                                    contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
+                                    labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
+                                />
+                                <Legend />
+                                <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} />
+                                <Line type="monotone" dataKey="simulated" name={scenarioInfo.name} stroke="#f97316" strokeWidth={3} strokeDasharray="5 5" dot={false} />
+                            </LineChart>
                         )}
                     </div>
                 </div>

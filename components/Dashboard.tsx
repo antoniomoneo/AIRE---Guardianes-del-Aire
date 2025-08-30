@@ -111,8 +111,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
             <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar dashboard">&times;</button>
         </div>
         
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="overflow-y-auto pr-2 flex flex-col flex-1">
+        <div className="flex-grow min-h-0 overflow-y-auto pr-2">
             <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 mb-4">
                 <div className="flex-shrink-0">
                     <h3 className="text-xs sm:text-sm font-bold text-gray-400 mb-2 uppercase tracking-wider">Contaminante</h3>
@@ -133,7 +132,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
                 </div>
             </div>
 
-            <div className="flex-1 min-h-[350px]">
+            <div className="h-[45vh] min-h-[350px]">
                  <DashboardChart data={chartData} pollutantName={POLLUTANT_NAMES[selectedPollutant]} />
             </div>
 
@@ -173,7 +172,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ data, onClose, userName })
                     </button>
                 </div>
             </div>
-          </div>
         </div>
       </div>
       {isPublishModalOpen && (
