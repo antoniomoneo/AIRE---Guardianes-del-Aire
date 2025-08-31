@@ -26,7 +26,7 @@ app.post("/api/gemini/generate", async (req, res) => {
         .json({ error: "GEMINI_API_KEY no configurada" });
     }
 
-    const { model = "gemini-1.5-flash", ...rest } = req.body || {};
+    const { model = "gemini-2.5-flash", ...rest } = req.body || {};
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
     )}:generateContent?key=${API_KEY}`;

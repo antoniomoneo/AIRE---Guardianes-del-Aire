@@ -4,6 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Guardianes del Aire de Madrid</title>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-V5321P45JC"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-V5321P45JC', {
+        linker: {
+          domains: [
+            'tangibledata.xyz',
+            'www.tangibledata.xyz',
+            'clima.tangibledata.xyz',
+            'aire.tangibledata.xyz'
+          ]
+        },
+        cookie_domain: 'auto'
+      });
+
+      // Opcional: marca este tráfico para identificarlo en GA4
+      gtag('set', 'user_properties', { site: 'aire-app' });
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

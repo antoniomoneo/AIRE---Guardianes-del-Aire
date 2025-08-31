@@ -112,7 +112,7 @@ ${AI_KNOWLEDGE_BASE}
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          model: "gemini-1.5-flash", // o el que prefieras
+          model: "gemini-2.5-flash",
           contents,
         }),
       });

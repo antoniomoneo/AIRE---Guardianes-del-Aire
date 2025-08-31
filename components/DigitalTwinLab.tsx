@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import type { AirQualityRecord, DashboardDataPoint, Pollutant } from '../types';
@@ -194,10 +195,10 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
                 </div>
                 
-                <div className="flex flex-col lg:flex-row flex-1 min-h-0">
-                    <div className="lg:w-1/3 xl:w-1/4 p-4 space-y-4 lg:border-r border-gray-700 overflow-y-auto flex-shrink-0">
+                <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 pt-4">
+                     <div className="lg:w-1/3 xl:w-2/5 space-y-6 overflow-y-auto pr-4 pb-4 flex-shrink-0">
                         <section>
-                            <label htmlFor="pollutant-select" className="text-lg font-bold text-gray-300">Contaminante a Analizar</label>
+                            <label htmlFor="pollutant-select" className="text-lg font-bold text-gray-300">1. Contaminante a Analizar</label>
                             <select
                                 id="pollutant-select"
                                 value={selectedPollutant}
@@ -210,32 +211,9 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                             </select>
                         </section>
                         
-                        <section className="pt-4 border-t border-gray-600">
-                            <h3 className="text-lg font-bold text-gray-300">Selecciona un Escenario "Qué hubiera pasado si..."</h3>
-                            {Object.entries(SCENARIOS).map(([id, { name }]) => (
-                                <button key={id} onClick={() => handleSelectScenario(id as ScenarioId)}
-                                    className={`w-full text-left p-3 mt-2 rounded-lg border-2 transition-all ${!aiSimulatedData && selectedScenario === id ? 'bg-indigo-500/30 border-indigo-400' : 'bg-gray-800 border-gray-700 hover:border-indigo-500'}`}
-                                >
-                                    <span className="font-semibold text-white">{name}</span>
-                                </button>
-                            ))}
-                        </section>
-                        
-                        {!aiSimulatedData && scenarioInfo && (
-                            <>
-                                <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
-                                    <h4 className="font-bold text-indigo-200">{scenarioInfo.name}</h4>
-                                    <p className="text-sm text-gray-400 mt-1">{scenarioInfo.description}</p>
-                                </div>
-                                <div className="mt-4 p-4 bg-gray-900/70 border-l-4 border-orange-400 rounded-r-lg">
-                                    <h4 className="font-bold text-orange-300">{scenarioJustification.title}</h4>
-                                    <p className="text-sm text-gray-300 mt-1">{scenarioJustification.justification}</p>
-                                </div>
-                            </>
-                        )}
-
-                        <section className="pt-4 border-t border-gray-600">
-                            <h3 className="text-lg font-bold text-gray-300">Crea tu Propio Escenario (IA)</h3>
+                        <section className="pt-6 border-t border-gray-700">
+                            <h3 className="text-lg font-bold text-green-300">2. Crea tu Propio Escenario (IA)</h3>
+                            <p className="text-sm text-gray-400 mt-1 mb-3">Describe una situación hipotética y nuestra IA generará una simulación. ¡Sé creativo!</p>
                             <textarea
                                 value={userInput}
                                 onChange={(e) => setUserInput(e.target.value)}
@@ -251,6 +229,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                             >
                                 {isLoadingAI ? 'Generando...' : 'Generar con IA'}
                             </button>
+                             {errorAI && <p className="text-sm text-red-400 mt-2 p-2 bg-red-900/50 rounded-md">{errorAI}</p>}
                             {aiSimulatedData && (
                                 <button
                                     onClick={() => setIsPublishModalOpen(true)}
@@ -262,34 +241,64 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                             )}
                         </section>
 
-                        {errorAI && <p className="text-sm text-red-400 p-2 bg-red-900/50 rounded-md">{errorAI}</p>}
+                         <section className="pt-6 border-t border-gray-700">
+                             <label htmlFor="scenario-select" className="text-lg font-bold text-gray-300">3. O explora un escenario predefinido</label>
+                             <select
+                                id="scenario-select"
+                                value={aiSimulatedData ? 'ai_custom' : selectedScenario}
+                                onChange={(e) => {
+                                    if (e.target.value !== 'ai_custom') {
+                                        handleSelectScenario(e.target.value as ScenarioId);
+                                    }
+                                }}
+                                className="w-full mt-2 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                disabled={isLoadingAI}
+                            >
+                                {aiSimulatedData && <option value="ai_custom" disabled>{`IA: ${userInput.substring(0, 25)}...`}</option>}
+                                {Object.entries(SCENARIOS).map(([id, { name }]) => (
+                                    <option key={id} value={id}>{name}</option>
+                                ))}
+                            </select>
+                        </section>
 
-                        {aiExplanation && (
-                            <div className="mt-4 p-4 bg-gray-900/70 border-l-4 border-green-400 rounded-r-lg animate-fade-in">
-                                <h4 className="font-bold text-green-300">Lógica de la IA</h4>
-                                <p className="text-sm text-gray-300 mt-1">{aiExplanation}</p>
-                            </div>
-                        )}
                     </div>
 
-                    <div ref={containerRef} className="flex-1 p-4 min-h-0 flex flex-col">
-                         <h3 className="text-center font-orbitron text-indigo-200 mb-4 flex-shrink-0 text-lg">
-                           Evolución de {POLLUTANT_NAMES[selectedPollutant]}
-                        </h3>
-                        {size.width > 0 && size.height > 0 && (
-                            <LineChart width={size.width} height={size.height - 40} data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                                <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: `µg/m³`, angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
-                                <Tooltip 
-                                    contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
-                                    labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
-                                />
-                                <Legend />
-                                <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} connectNulls />
-                                <Line type="monotone" dataKey="simulated" name={simulationName} stroke={simulationColor} strokeWidth={3} strokeDasharray="5 5" dot={false} connectNulls />
-                            </LineChart>
-                        )}
+                    <div className="flex-1 min-h-0 flex flex-col">
+                        <div ref={containerRef} className="flex-grow min-h-0 flex flex-col">
+                            <h3 className="text-center font-orbitron text-indigo-200 mb-4 flex-shrink-0 text-lg">
+                            Evolución de {POLLUTANT_NAMES[selectedPollutant]}
+                            </h3>
+                            {size.width > 0 && size.height > 0 && (
+                                <LineChart width={size.width} height={size.height - 40} data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                    <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
+                                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: `µg/m³`, angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
+                                        labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
+                                    />
+                                    <Legend />
+                                    <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} connectNulls />
+                                    <Line type="monotone" dataKey="simulated" name={simulationName} stroke={simulationColor} strokeWidth={3} strokeDasharray="5 5" dot={false} connectNulls />
+                                </LineChart>
+                            )}
+                        </div>
+                        <div className="flex-shrink-0 mt-4">
+                            {aiExplanation ? (
+                                <div className="p-4 bg-gray-900/70 border-l-4 border-green-400 rounded-r-lg animate-fade-in">
+                                    <h4 className="font-bold text-green-300">Lógica de la IA</h4>
+                                    <p className="text-sm text-gray-300 mt-1">{aiExplanation}</p>
+                                </div>
+                            ) : scenarioInfo && (
+                                <div className="p-4 bg-gray-900/70 border-l-4 border-orange-400 rounded-r-lg animate-fade-in">
+                                    <h4 className="font-bold text-orange-300">{scenarioInfo.name}</h4>
+                                    <p className="text-sm text-gray-300 mt-2">{scenarioInfo.description}</p>
+                                    <p className="text-sm text-gray-400 mt-2">
+                                        <span className='font-bold text-gray-300'>Lógica:</span> {scenarioJustification.justification}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
