@@ -1,7 +1,3 @@
-
-
-
-import { GoogleGenAI, Type } from "@google/genai";
 import type { DashboardDataPoint } from '../types';
 
 interface AIScenarioResponse {
@@ -9,27 +5,26 @@ interface AIScenarioResponse {
     simulatedData: DashboardDataPoint[];
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
-
+// The schema is now a plain JSON object, as it will be sent to the backend.
 const responseSchema = {
-    type: Type.OBJECT,
+    type: 'OBJECT',
     properties: {
         explanation: {
-            type: Type.STRING,
+            type: 'STRING',
             description: "Una breve explicación (2-3 frases) de la lógica aplicada para generar la simulación, dirigida al usuario final."
         },
         simulatedData: {
-            type: Type.ARRAY,
+            type: 'ARRAY',
             description: "La serie temporal completa de datos simulados.",
             items: {
-                type: Type.OBJECT,
+                type: 'OBJECT',
                 properties: {
                     date: {
-                        type: Type.STRING,
+                        type: 'STRING',
                         description: "El año del dato (ej: '2023')."
                     },
                     value: {
-                        type: Type.NUMBER,
+                        type: 'NUMBER',
                         description: "El valor simulado del contaminante para ese año."
                     }
                 },
@@ -68,32 +63,55 @@ export const generateScenarioWithAI = async (
     `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: fullPrompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: responseSchema,
+        const response = await fetch('/api/gemini/generate', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
             },
+            body: JSON.stringify({
+                model: 'gemini-2.5-flash',
+                contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: responseSchema,
+                },
+            }),
         });
         
-        const jsonText = response.text.trim();
-        const parsedResponse = JSON.parse(jsonText);
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`Error del servidor (${response.status}): ${errorBody}`);
+        }
 
-        // Basic validation
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            throw new Error('La respuesta del servidor no es un JSON válido.');
+        }
+
+        const backendResponse = await response.json();
+        
+        // The model output is a stringified JSON inside the backend response
+        const modelOutputText = backendResponse?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!modelOutputText || typeof modelOutputText !== 'string') {
+            throw new Error("La respuesta de la IA está vacía o tiene un formato incorrecto.");
+        }
+        
+        // Parse the stringified JSON from the model
+        const parsedResponse = JSON.parse(modelOutputText);
+        
+        // Basic validation of the final object
         if (!parsedResponse.explanation || !Array.isArray(parsedResponse.simulatedData)) {
-            throw new Error("La respuesta de la IA no tiene el formato esperado.");
+            throw new Error("Los datos de la simulación de la IA no tienen el formato esperado (faltan 'explanation' o 'simulatedData').");
         }
 
         return parsedResponse as AIScenarioResponse;
 
     } catch (error) {
-        console.error("Error calling Gemini API:", error);
+        console.error("Error al generar el escenario con IA:", error);
         if (error instanceof Error) {
-            if(error.message.includes('API key not valid')) {
-                 throw new Error("La clave de API de Gemini no es válida o no está configurada.");
-            }
+            throw new Error(`No se pudo generar el escenario: ${error.message}`);
         }
-        throw new Error("No se pudo generar el escenario desde la IA.");
+        throw new Error("Ocurrió un error desconocido al generar el escenario con la IA.");
     }
 };
