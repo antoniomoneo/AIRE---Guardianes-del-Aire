@@ -1,6 +1,4 @@
 
-
-
 import type { ReactNode } from 'react';
 import type p5 from 'p5';
 import type * as THREE from 'three';
@@ -209,4 +207,13 @@ export interface StationDailyAverage {
     stationCode: string;
     value: number;
     aqi: number;
+}
+
+// --- Participa Types ---
+export interface ParticipationItem {
+    id: string;
+    title: string;
+    description: string;
+    cached_votes_up: number;
+    link: string;
 }

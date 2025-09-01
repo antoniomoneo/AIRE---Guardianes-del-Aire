@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Scene } from './components/Scene';
 import { useAirQualityData } from './hooks/useAirQualityData';
@@ -26,6 +23,8 @@ import { DigitalTwinLab } from './components/DigitalTwinLab';
 import { Chat } from './components/Chat';
 import { AIEye } from './components/AIEye';
 import { logoUrl } from './utils/assets';
+import { Participa } from './components/Participa';
+import { KnowledgeBase } from './components/KnowledgeBase';
 
 
 type AppState = 'splash' | 'title' | 'cover' | 'intro' | 'apps';
@@ -48,6 +47,8 @@ const App: React.FC = () => {
   const [isDataStoryOpen, setIsDataStoryOpen] = useState(false);
   const [isDigitalTwinLabOpen, setIsDigitalTwinLabOpen] = useState(false);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
+  const [isParticipaOpen, setIsParticipaOpen] = useState(false);
+  const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(false);
 
   const [isNarrationEnabled, setIsNarrationEnabled] = useState(true);
   const { data, loading, error } = useAirQualityData();
@@ -106,6 +107,8 @@ const App: React.FC = () => {
     setIsDataStoryOpen(false);
     setIsDigitalTwinLabOpen(false);
     setIsAiAssistantOpen(false);
+    setIsParticipaOpen(false);
+    setIsKnowledgeBaseOpen(false);
   }, []);
 
   const handleGoHome = useCallback(() => {
@@ -210,6 +213,8 @@ const App: React.FC = () => {
                 onOpenDataStory={() => openModal(setIsDataStoryOpen)}
                 onOpenDigitalTwinLab={() => openModal(setIsDigitalTwinLabOpen)}
                 onOpenAiAssistant={() => openModal(setIsAiAssistantOpen)}
+                onOpenParticipa={() => openModal(setIsParticipaOpen)}
+                onOpenKnowledgeBase={() => openModal(setIsKnowledgeBaseOpen)}
             />;
         default: return null;
     }
@@ -288,6 +293,14 @@ const App: React.FC = () => {
 
       {isAiAssistantOpen && data && (
         <AiAssistant data={data} onClose={() => setIsAiAssistantOpen(false)} userName={userName} />
+      )}
+      
+      {isParticipaOpen && (
+        <Participa onClose={() => setIsParticipaOpen(false)} userName={userName} />
+      )}
+
+      {isKnowledgeBaseOpen && (
+        <KnowledgeBase onClose={() => setIsKnowledgeBaseOpen(false)} userName={userName} />
       )}
     </main>
   );

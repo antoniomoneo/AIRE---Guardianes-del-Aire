@@ -1,6 +1,3 @@
-
-
-
 import React, { useEffect } from 'react';
 
 interface AppsLandingPageProps {
@@ -13,6 +10,8 @@ interface AppsLandingPageProps {
   onOpenDataStory: () => void;
   onOpenDigitalTwinLab: () => void;
   onOpenAiAssistant: () => void;
+  onOpenParticipa: () => void;
+  onOpenKnowledgeBase: () => void;
 }
 
 const apps = [
@@ -31,14 +30,6 @@ const apps = [
         action: 'onOpenDataStory',
         color: 'border-yellow-500/50 hover:border-yellow-400 hover:shadow-yellow-500/20',
         points: 200,
-    },
-    {
-        title: "Glosario",
-        description: "Define los términos técnicos y los distintos contaminantes.",
-        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4a2 2 0 012 2v2h4a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V8a2 2 0 00-2-2H4V4z" clipRule="evenodd" /></svg>,
-        action: 'onOpenGlossary',
-        color: 'border-blue-500/50 hover:border-blue-400 hover:shadow-blue-500/20',
-        points: 100,
     },
     {
         title: "Panel de Control",
@@ -87,10 +78,34 @@ const apps = [
         action: 'onOpenEducationalPack',
         color: 'border-teal-500/50 hover:border-teal-400 hover:shadow-teal-500/20',
         points: 200,
-    }
+    },
+    {
+        title: "Glosario",
+        description: "Define los términos técnicos y los distintos contaminantes.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 012-2h4a2 2 0 012 2v2h4a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V8a2 2 0 00-2-2H4V4z" clipRule="evenodd" /></svg>,
+        action: 'onOpenGlossary',
+        color: 'border-blue-500/50 hover:border-blue-400 hover:shadow-blue-500/20',
+        points: 100,
+    },
+    {
+        title: "Base de Conocimiento",
+        description: "Consulta el informe técnico que sirve como fuente de conocimiento para A.I.R.E.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V5zm3 1a1 1 0 000 2h8a1 1 0 100-2H6zM6 9a1 1 0 000 2h8a1 1 0 100-2H6zm0 4a1 1 0 100 2h4a1 1 0 100-2H6z" clipRule="evenodd" /></svg>,
+        action: 'onOpenKnowledgeBase',
+        color: 'border-gray-500/50 hover:border-gray-400 hover:shadow-gray-500/20',
+        points: 100,
+    },
+    {
+        title: "Participa Madrid",
+        description: "Explora propuestas y usa la IA para redactar la tuya y mejorar el aire.",
+        icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor"><path d="M11.25 5.038a3.5 3.5 0 10-2.5 0l-3.362 2.018a3.502 3.502 0 100 5.888l3.362 2.018a3.5 3.5 0 102.5 0l3.362-2.018a3.502 3.502 0 100-5.888L11.25 5.038zM8 6.5a2 2 0 114 0 2 2 0 01-4 0zM5.5 12a2 2 0 100-4 2 2 0 000 4zM12 15.5a2 2 0 114 0 2 2 0 01-4 0z" /></svg>,
+        action: 'onOpenParticipa',
+        color: 'border-pink-500/50 hover:border-pink-400 hover:shadow-pink-500/20',
+        points: 150,
+    },
 ];
 
-export const AppsLandingPage: React.FC<Omit<AppsLandingPageProps, 'onClose'>> = (props) => {
+export const AppsLandingPage: React.FC<AppsLandingPageProps> = (props) => {
     return (
         <div className="w-full h-full bg-gray-900/95 px-6 pb-6 pt-28 flex flex-col relative overflow-hidden">
             <div className="flex-shrink-0">
@@ -102,7 +117,7 @@ export const AppsLandingPage: React.FC<Omit<AppsLandingPageProps, 'onClose'>> = 
                     {apps.map(app => (
                         <button 
                             key={app.title}
-                            onClick={props[app.action as keyof Omit<AppsLandingPageProps, 'onClose'>] as () => void}
+                            onClick={props[app.action as keyof AppsLandingPageProps] as () => void}
                             className={`relative p-6 bg-gray-800/50 rounded-lg border-2 text-left flex flex-col items-start gap-3 transition-all duration-300 ${app.color} shadow-lg`}
                         >
                             {app.points > 0 && (
