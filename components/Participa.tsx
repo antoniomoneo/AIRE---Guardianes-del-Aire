@@ -63,6 +63,8 @@ const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): Participa
             titleIndex: h.indexOf('title'),
             descIndex: h.indexOf('description') !== -1 ? h.indexOf('description') : h.indexOf('summary'),
             votesIndex: h.indexOf('cached_votes_up'),
+            createdAtIndex: h.indexOf('created_at'),
+            retiredAtIndex: h.indexOf('retired_at'),
         });
 
         let indices = getHeaderIndices(header);
@@ -85,9 +87,9 @@ const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): Participa
             }
         }
 
-        const { idIndex, titleIndex, descIndex, votesIndex } = indices;
+        const { idIndex, titleIndex, descIndex, votesIndex, createdAtIndex, retiredAtIndex } = indices;
 
-        return lines.map(line => {
+        return lines.map((line): ParticipationItem | null => {
             if (!line.trim()) return null;
             const values = parseCsvLine(line, delimiter);
             if (values.length < header.length) return null;
@@ -96,8 +98,9 @@ const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): Participa
             if (!id) return null;
 
             const votes = votesIndex !== -1 ? parseInt(values[votesIndex], 10) || 0 : 0;
-            // Construct the link manually as the URL field is no longer in the CSV
             const link = `https://decide.madrid.es/${type}/${id}`;
+            const createdAt = createdAtIndex !== -1 ? values[createdAtIndex] : new Date().toISOString();
+            const retiredAt = retiredAtIndex !== -1 ? values[retiredAtIndex] : '';
 
             return {
                 id: id,
@@ -105,8 +108,17 @@ const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): Participa
                 description: values[descIndex] || '',
                 cached_votes_up: votes,
                 link: link,
+                created_at: createdAt,
+                retired_at: retiredAt,
             };
-        }).filter((item): item is ParticipationItem => item !== null && !!item.id && !!item.title && !!item.link);
+            // FIX: Explicitly typing the return of the map callback resolves the type predicate error in the filter.
+        }).filter((item): item is ParticipationItem => 
+            item !== null && 
+            !!item.id && 
+            !!item.title && 
+            !!item.link &&
+            (!item.retired_at || item.retired_at.trim() === '')
+        );
     } catch (e) {
         console.error("Failed to parse CSV data", e);
         if (e instanceof Error) throw e; 
@@ -131,6 +143,12 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const hasAwardedPoints = useRef(false);
 
+    // State for Quick Filters
+    const [activeQuickFilter, setActiveQuickFilter] = useState<'all' | '2024' | '2025' | 'ai'>('all');
+    const [isAiFiltering, setIsAiFiltering] = useState(false);
+    const [aiFilterError, setAiFilterError] = useState<string | null>(null);
+    const [aiFilteredIds, setAiFilteredIds] = useState<Set<string> | null>(null);
+
     // State for AI Proposal Generator
     const [idea, setIdea] = useState('');
     const [generatedProposal, setGeneratedProposal] = useState('');
@@ -152,6 +170,9 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
             setIsLoading(true);
             setError(null);
             setItems([]);
+            // Reset AI filters when tab changes
+            setAiFilteredIds(null);
+            setActiveQuickFilter('all');
             const url = activeTab === 'proposals' ? PROPOSALS_URL : DEBATES_URL;
             try {
                 const response = await fetch(url);
@@ -171,12 +192,23 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
     }, [activeTab]);
     
     const filteredItems = useMemo(() => {
-        if (!searchTerm) return items;
-        return items.filter(item => 
+        let baseItems = items;
+
+        if (activeQuickFilter === 'ai' && aiFilteredIds) {
+            baseItems = items.filter(item => aiFilteredIds.has(item.id));
+        } else if (activeQuickFilter === '2024') {
+            baseItems = items.filter(item => item.created_at.startsWith('2024'));
+        } else if (activeQuickFilter === '2025') {
+            baseItems = items.filter(item => item.created_at.startsWith('2025'));
+        }
+        
+        if (!searchTerm) return baseItems;
+
+        return baseItems.filter(item => 
             item.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
             item.description.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [items, searchTerm]);
+    }, [items, searchTerm, activeQuickFilter, aiFilteredIds]);
 
     const handleGenerateDraft = async () => {
         if (!idea.trim() || isGenerating) return;
@@ -221,6 +253,69 @@ La idea del ciudadano es: "${idea}"`;
         }
     };
 
+    const handleAiFilter = async () => {
+        if (isAiFiltering) return;
+        setActiveQuickFilter('ai');
+        if (aiFilteredIds) return;
+
+        setIsAiFiltering(true);
+        setAiFilterError(null);
+
+        const proposalsForAI = items.map(({ id, title, description }) => ({ id, title, description }));
+
+        const prompt = `
+            Analiza la siguiente lista de propuestas ciudadanas de Madrid. Tu tarea es identificar las que están más directa y significativamente relacionadas con la mejora de la CALIDAD DEL AIRE.
+            Considera temas como la reducción de emisiones del tráfico, fomento de la movilidad sostenible (bicicletas, peatones), zonas verdes, Zonas de Bajas Emisiones (ZBE), energías limpias, y control de la polución.
+            Devuelve únicamente un objeto JSON con una clave "relevant_ids" que contenga un array con los IDs de las propuestas más relevantes.
+
+            Propuestas:
+            ${JSON.stringify(proposalsForAI.slice(0, 150))}
+        `;
+
+        const responseSchema = {
+            type: "OBJECT",
+            properties: {
+                relevant_ids: {
+                    type: "ARRAY",
+                    description: "Un array de IDs de propuestas que son altamente relevantes para la calidad del aire.",
+                    items: { type: "STRING" }
+                }
+            },
+            required: ["relevant_ids"]
+        };
+
+        try {
+            const resp = await fetch("/api/gemini/generate", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    model: "gemini-2.5-flash",
+                    contents: [{ role: "user", parts: [{ text: prompt }] }],
+                    config: { responseMimeType: "application/json", responseSchema }
+                }),
+            });
+
+            if (!resp.ok) throw new Error(`Error del servidor: ${resp.status}`);
+            const data = await resp.json();
+            const modelText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!modelText) throw new Error("La respuesta de la IA está vacía.");
+
+            const result = JSON.parse(modelText);
+            if (!result.relevant_ids || !Array.isArray(result.relevant_ids)) {
+                throw new Error("La respuesta de la IA no tiene el formato esperado.");
+            }
+            setAiFilteredIds(new Set(result.relevant_ids));
+
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Error desconocido.";
+            setAiFilterError(`Filtro IA fallido: ${message}`);
+            setActiveQuickFilter('all');
+        } finally {
+            setIsAiFiltering(false);
+        }
+    };
+
+
     const handleCopy = () => {
         navigator.clipboard.writeText(generatedProposal).then(() => {
             alert('¡Propuesta copiada al portapapeles!');
@@ -240,6 +335,22 @@ La idea del ciudadano es: "${idea}"`;
             {label}
         </button>
     );
+    
+    const QuickFilterButton: React.FC<{ label: string, onClick: () => void, isActive: boolean, isLoading?: boolean, disabled?: boolean }> = ({ label, onClick, isActive, isLoading = false, disabled = false }) => (
+        <button
+            onClick={onClick}
+            disabled={isLoading || disabled}
+            className={`px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-full transition-all duration-200 border-2 flex items-center gap-2 ${
+                isActive
+                ? 'bg-pink-500 border-pink-400 text-white shadow-md shadow-pink-500/20'
+                : 'bg-gray-700/50 border-gray-600 hover:border-pink-500 text-gray-300'
+            } ${isLoading || disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+        >
+            {isLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+            {label}
+        </button>
+    );
+
 
     const Card: React.FC<{ item: ParticipationItem }> = ({ item }) => (
         <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4 flex flex-col gap-3 transition-transform hover:scale-[1.02] hover:border-pink-400/50">
@@ -273,13 +384,22 @@ La idea del ciudadano es: "${idea}"`;
                     {/* Left Column: Explorer */}
                     <div className="w-full lg:w-1/2 flex flex-col">
                         <h3 className="text-xl font-orbitron text-pink-100 border-b border-pink-500/20 pb-2 mb-4 flex-shrink-0">
-                            Explora Propuestas Existentes
+                            Explora Iniciativas Existentes
                         </h3>
                         <div className="flex-shrink-0 flex border-b-2 border-gray-800">
                             <TabButton type="proposals" label="Propuestas" />
                             <TabButton type="debates" label="Debates" />
                         </div>
-                        <div className="py-3 flex-shrink-0">
+                        <div className="py-3 flex-shrink-0 space-y-2">
+                             <p className="text-sm text-gray-400">Mostrando {filteredItems.length} de {items.length} iniciativas.</p>
+                             <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-gray-400 text-sm font-bold">Filtros rápidos:</span>
+                                <QuickFilterButton label="Todos" onClick={() => setActiveQuickFilter('all')} isActive={activeQuickFilter === 'all'} />
+                                <QuickFilterButton label="2024" onClick={() => setActiveQuickFilter('2024')} isActive={activeQuickFilter === '2024'} disabled={activeTab === 'debates'} />
+                                <QuickFilterButton label="2025" onClick={() => setActiveQuickFilter('2025')} isActive={activeQuickFilter === '2025'} disabled={activeTab === 'debates'}/>
+                                <QuickFilterButton label="Calidad de Aire (IA)" onClick={handleAiFilter} isActive={activeQuickFilter === 'ai'} isLoading={isAiFiltering} disabled={activeTab === 'debates'} />
+                            </div>
+                            {aiFilterError && <p className="text-red-400 text-xs">{aiFilterError}</p>}
                             <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Filtrar por palabra clave..." className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 text-sm" />
                         </div>
                         <div className="flex-grow overflow-y-auto pr-2">
@@ -288,7 +408,7 @@ La idea del ciudadano es: "${idea}"`;
                                 : filteredItems.length > 0 ? <div className="space-y-4">{filteredItems.map(item => <Card key={item.id} item={item} />)}</div>
                                 : <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
                                     <h3 className="text-2xl font-orbitron">No hay resultados</h3>
-                                    <p className="mt-2 max-w-md">{items.length === 0 ? `No se encontraron ${activeTab === 'proposals' ? 'propuestas' : 'debates'} sobre calidad del aire.` : `Ningún resultado coincide con "${searchTerm}".`}</p>
+                                    <p className="mt-2 max-w-md">{items.length === 0 ? `No se encontraron ${activeTab === 'proposals' ? 'propuestas' : 'debates'} sobre calidad del aire.` : `Ningún resultado coincide con los filtros aplicados.`}</p>
                                 </div>
                             }
                         </div>

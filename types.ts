@@ -216,4 +216,6 @@ export interface ParticipationItem {
     description: string;
     cached_votes_up: number;
     link: string;
+    created_at: string;
+    retired_at?: string;
 }
