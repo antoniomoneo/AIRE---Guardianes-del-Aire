@@ -1,6 +1,7 @@
 
 
 
+
 import { v4 as uuidv4 } from 'uuid';
 import type { GalleryItem, AudioVizGalleryItem, Model3DGalleryItem, InsightGalleryItem, AIScenarioGalleryItem } from '../types';
 import { awardPoints } from './scoringService';
@@ -8,13 +9,6 @@ import { awardPoints } from './scoringService';
 const VOTED_KEY_PREFIX = 'aire_gallery_voted_';
 
 // --- GitHub Integration ---
-const GITHUB_OWNER = 'antoniomoneo';
-const GITHUB_REPO = 'Aire-gallery';
-// This token is assumed to be provided in the execution environment, similar to the Gemini API_KEY.
-// It is NOT stored in the code.
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const API_BASE_URL_CONTENT = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents`;
-
 const FOLDER_MAP: Record<GalleryItem['type'], string> = {
     'insight': 'insights',
     'audio-viz': 'audio-viz',
@@ -22,35 +16,28 @@ const FOLDER_MAP: Record<GalleryItem['type'], string> = {
     'ai-scenario': 'ai-scenarios',
 };
 
-// Helper for GitHub API requests
+// Helper for GitHub API requests via our own proxy
 async function githubApiRequest(path: string, options: RequestInit = {}) {
-    const targetUrl = `${API_BASE_URL_CONTENT}/${path}`;
-    // To fix potential CORS issues, requests are routed through a proxy.
-    const url = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+    const url = `/api/github/${path}`; // Use our new proxy endpoint
 
     const headers: Record<string, string> = {
-        'Accept': 'application/vnd.github.v3+json',
-        'X-GitHub-Api-Version': '2022-11-28',
+        'Accept': 'application/json',
     };
+    
+    if (options.method?.toUpperCase() !== 'GET' && options.body) {
+        headers['Content-Type'] = 'application/json';
+    }
 
     if (options.headers) {
         Object.assign(headers, options.headers);
-    }
-    
-    // For write operations, a token is required.
-    if (['PUT', 'POST', 'DELETE'].includes(options.method?.toUpperCase() || '')) {
-        if (!GITHUB_TOKEN) {
-             console.error('GitHub token is not configured. Write operations will fail.');
-        } else {
-            headers['Authorization'] = `token ${GITHUB_TOKEN}`;
-        }
     }
 
     const response = await fetch(url, { ...options, headers });
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: response.statusText }));
-        throw new Error(`GitHub API Error (${response.status}): ${errorData.message}`);
+        const errorMessage = errorData.message || errorData.error || 'Unknown error from proxy.';
+        throw new Error(`Proxy API Error (${response.status}): ${errorMessage}`);
     }
     
     // Handle responses with no body content
@@ -95,7 +82,7 @@ export const getGalleryItems = async (): Promise<GalleryItem[]> => {
                 
                 return (await Promise.all(fileContentPromises)).filter(Boolean);
             } catch (e) {
-                 if (e instanceof Error && e.message.includes('404')) {
+                 if (e instanceof Error && (e.message.includes('404') || e.message.includes('Not Found'))) {
                     // Directory doesn't exist yet, which is fine.
                     return [];
                 }
@@ -118,9 +105,6 @@ export const getGalleryItems = async (): Promise<GalleryItem[]> => {
 };
 
 export const addGalleryItem = async (itemData: Omit<AudioVizGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<Model3DGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<InsightGalleryItem, 'id' | 'createdAt' | 'votes'> | Omit<AIScenarioGalleryItem, 'id' | 'createdAt' | 'votes'>): Promise<void> => {
-    if (!GITHUB_TOKEN) {
-        throw new Error('No se puede publicar. El token de GitHub no está configurado en el entorno de la aplicación.');
-    }
     const newItem: Omit<GalleryItem, 'votes'> & { votes: number } = {
         ...itemData,
         id: uuidv4(),
@@ -150,9 +134,6 @@ export const addGalleryItem = async (itemData: Omit<AudioVizGalleryItem, 'id' | 
 };
 
 export const deleteGalleryItem = async (id: string): Promise<void> => {
-    if (!GITHUB_TOKEN) {
-        throw new Error('No se puede eliminar. El token de GitHub no está configurado.');
-    }
     if (!galleryCache) {
         await getGalleryItems();
     }
@@ -176,11 +157,6 @@ export const deleteGalleryItem = async (id: string): Promise<void> => {
 
 export const voteForItem = async (id: string): Promise<void> => {
     if (hasVotedForItem(id)) return;
-
-    if (!GITHUB_TOKEN) {
-         alert('La función de votar está deshabilitada porque no hay un token de GitHub configurado para guardar los votos.');
-         return;
-    }
 
     if (!galleryCache) {
        await getGalleryItems();
