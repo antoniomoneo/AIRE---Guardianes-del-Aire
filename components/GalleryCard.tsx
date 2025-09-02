@@ -10,12 +10,21 @@ interface GalleryCardProps {
     isAdmin: boolean;
 }
 
+const TYPE_INFO: Record<GalleryItem['type'], { label: string, color: string }> = {
+    'insight': { label: 'Análisis', color: 'bg-cyan-500/80' },
+    'ai-scenario': { label: 'Escenario IA', color: 'bg-indigo-500/80' },
+    'audio-viz': { label: 'Audio & Viz', color: 'bg-purple-500/80' },
+    '3d-model': { label: 'Modelo 3D', color: 'bg-orange-500/80' },
+};
+
 export const GalleryCard: React.FC<GalleryCardProps> = ({ item, onClick, onVote, onDelete, isVoted, isAdmin }) => {
     const creationDate = new Date(item.createdAt).toLocaleDateString('es-ES', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
     });
+    
+    const currentTypeInfo = TYPE_INFO[item.type];
 
     const renderCardContent = () => {
         switch (item.type) {
@@ -79,10 +88,14 @@ export const GalleryCard: React.FC<GalleryCardProps> = ({ item, onClick, onVote,
                 return null;
         }
     };
-    // FIX: The component was not returning any JSX, causing a type error. Added a return statement to render the card.
     return (
         <div className="bg-gray-800/50 rounded-lg border border-gray-700 flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-yellow-400/50">
-            <div onClick={onClick} className="cursor-pointer flex-grow">
+            <div onClick={onClick} className="cursor-pointer flex-grow relative">
+                 {currentTypeInfo && (
+                    <div className={`absolute top-2 right-2 text-white text-xs font-bold px-2 py-1 rounded-full z-10 ${currentTypeInfo.color}`}>
+                        {currentTypeInfo.label}
+                    </div>
+                )}
                 {renderCardContent()}
             </div>
             <div className="p-3 bg-gray-900/40 flex justify-between items-center text-xs">

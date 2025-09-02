@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import type { GalleryItem, AirQualityRecord } from '../types';
 import { getGalleryItems, deleteGalleryItem, voteForItem, hasVotedForItem } from '../utils/galleryService';
@@ -12,7 +13,6 @@ interface GalleryProps {
 
 export const Gallery: React.FC<GalleryProps> = ({ onClose, data }) => {
     const [items, setItems] = useState<GalleryItem[]>([]);
-    const [activeTab, setActiveTab] = useState<'audio-viz' | '3d-model' | 'insight' | 'ai-scenario'>('insight');
     const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -93,21 +93,6 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose, data }) => {
         }
     };
 
-    const filteredItems = useMemo(() => {
-        return items.filter(item => item.type === activeTab);
-    }, [items, activeTab]);
-
-    const TabButton: React.FC<{ type: 'audio-viz' | '3d-model' | 'insight' | 'ai-scenario', label: string }> = ({ type, label }) => (
-        <button
-            onClick={() => setActiveTab(type)}
-            className={`flex-1 p-3 text-center font-orbitron text-sm sm:text-base transition-colors rounded-t-lg ${
-                activeTab === type ? 'bg-gray-800 text-yellow-300' : 'bg-gray-900/50 text-gray-400 hover:bg-gray-800/70'
-            }`}
-        >
-            {label}
-        </button>
-    );
-
     return (
         <div className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
             <div className="bg-gray-900/90 border border-yellow-500/30 rounded-2xl shadow-2xl w-full max-w-7xl h-full sm:h-[90vh] p-4 sm:p-6 flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -116,21 +101,14 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose, data }) => {
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
                 </div>
 
-                <div className="flex-shrink-0 flex border-b-2 border-gray-800">
-                    <TabButton type="insight" label="Análisis" />
-                    <TabButton type="ai-scenario" label="Escenarios IA" />
-                    <TabButton type="audio-viz" label="Audio & Viz" />
-                    <TabButton type="3d-model" label="Modelos 3D" />
-                </div>
-
                 <div className="flex-grow overflow-y-auto pt-4">
                     {error ? (
                         <div className="flex items-center justify-center h-full text-center text-red-400">{error}</div>
                     ) : isLoading ? (
                         <div className="flex items-center justify-center h-full text-gray-400">Cargando creaciones...</div>
-                    ) : filteredItems.length > 0 ? (
+                    ) : items.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {filteredItems.map(item => (
+                            {items.map(item => (
                                 <GalleryCard
                                     key={item.id}
                                     item={item}
@@ -145,7 +123,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose, data }) => {
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
                             <h3 className="text-2xl font-orbitron">Vacío por ahora...</h3>
-                            <p className="mt-2 max-w-md">Parece que nadie ha publicado nada en esta categoría todavía. ¡Sé el primero en compartir tu creación o análisis!</p>
+                            <p className="mt-2 max-w-md">Parece que nadie ha publicado nada todavía. ¡Sé el primero en compartir tu creación o análisis!</p>
                         </div>
                     )}
                 </div>
