@@ -259,8 +259,8 @@ const App: React.FC = () => {
         <EducationalPack onClose={() => setIsEducationalPackOpen(false)} userName={userName} />
       )}
 
-      {isGalleryOpen && (
-        <Gallery onClose={() => setIsGalleryOpen(false)} />
+      {isGalleryOpen && data && (
+        <Gallery onClose={() => setIsGalleryOpen(false)} data={data} />
       )}
 
       {isRankingOpen && (

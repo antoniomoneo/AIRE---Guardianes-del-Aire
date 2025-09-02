@@ -27,8 +27,21 @@ async function githubApiRequest(path: string, options: RequestInit = {}) {
     const response = await fetch(url, { ...options, headers });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: `Error del servidor: ${response.statusText}` }));
-        // Extract a more user-friendly error from GitHub's response if available
+        const contentType = response.headers.get('content-type');
+        let errorData;
+        
+        if (contentType && contentType.includes('application/json')) {
+            try {
+                errorData = await response.json();
+            } catch (jsonError) {
+                errorData = { message: `Error del servidor: ${response.statusText} (respuesta JSON malformada)` };
+            }
+        } else {
+            // The response is not JSON (e.g., HTML error page), so we can't parse it.
+            // We'll build a message from status text and content type.
+            errorData = { message: `Respuesta no válida del servidor (tipo: ${contentType || 'desconocido'})` };
+        }
+        
         const detailedMessage = errorData.message || errorData.error || 'Error desconocido del proxy.';
         throw new Error(`Error en la API (${response.status}): ${detailedMessage}`);
     }

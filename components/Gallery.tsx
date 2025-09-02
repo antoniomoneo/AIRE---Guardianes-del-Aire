@@ -1,21 +1,23 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
-import type { GalleryItem } from '../types';
+import type { GalleryItem, AirQualityRecord } from '../types';
 import { getGalleryItems, deleteGalleryItem, voteForItem, hasVotedForItem } from '../utils/galleryService';
 import { GalleryCard } from './GalleryCard';
+import { DecisionPanel as GalleryDetailModal } from './DecisionPanel';
 
 interface GalleryProps {
   onClose: () => void;
+  data: AirQualityRecord[];
 }
 
-export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
+export const Gallery: React.FC<GalleryProps> = ({ onClose, data }) => {
     const [items, setItems] = useState<GalleryItem[]>([]);
     const [activeTab, setActiveTab] = useState<'audio-viz' | '3d-model' | 'insight' | 'ai-scenario'>('insight');
     const [votedIds, setVotedIds] = useState<Set<string>>(new Set());
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedItem, setSelectedItem] = useState<GalleryItem | null>(null);
 
     const loadGallery = async () => {
         setIsLoading(true);
@@ -46,7 +48,13 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
+            if (event.key === 'Escape') {
+                if (selectedItem) {
+                    setSelectedItem(null);
+                } else {
+                    onClose();
+                }
+            }
         };
         window.addEventListener('keydown', handleKeyDown);
 
@@ -56,7 +64,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
         setIsAdmin(params.get('admin') === 'true');
 
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    }, [onClose, selectedItem]);
 
     const handleVote = async (id: string) => {
         try {
@@ -78,6 +86,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
         try {
             await deleteGalleryItem(id);
             await loadGallery(); // Refetch to confirm deletion
+            setSelectedItem(null); // Close modal after deletion
         } catch (e) {
             console.error("Failed to delete:", e);
             alert("Hubo un error al eliminar el elemento.");
@@ -125,6 +134,7 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
                                 <GalleryCard
                                     key={item.id}
                                     item={item}
+                                    onClick={() => setSelectedItem(item)}
                                     onVote={handleVote}
                                     onDelete={handleDelete}
                                     isVoted={votedIds.has(item.id)}
@@ -140,6 +150,17 @@ export const Gallery: React.FC<GalleryProps> = ({ onClose }) => {
                     )}
                 </div>
             </div>
+             {selectedItem && (
+                <GalleryDetailModal
+                    item={selectedItem}
+                    onClose={() => setSelectedItem(null)}
+                    onVote={handleVote}
+                    onDelete={handleDelete}
+                    isVoted={votedIds.has(selectedItem.id)}
+                    isAdmin={isAdmin}
+                    historicalData={data}
+                />
+            )}
              <style>{`
                 @keyframes fade-in {
                     from { opacity: 0; transform: scale(0.95); }
