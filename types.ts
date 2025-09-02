@@ -1,4 +1,3 @@
-
 import type { ReactNode } from 'react';
 import type p5 from 'p5';
 import type * as THREE from 'three';
@@ -89,7 +88,7 @@ export interface VisualizationOption {
 }
 
 
-export type Instrument = 'synthPad' | 'crystalPluck' | 'rhythmicKit';
+export type Instrument = 'synthPad' | 'crystalPluck' | 'rhythmicKit' | 'piano' | 'strings' | 'flute';
 export type Rhythm = 'sustained' | 'arpUp' | 'arpDown';
 export type Key = 'major' | 'minor';
 

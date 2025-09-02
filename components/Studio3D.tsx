@@ -116,11 +116,18 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
         animate();
 
         const handleResize = () => {
-            // Currency check: only resize if the renderer and container are still valid
-            if (rendererRef.current !== currentRenderer) return;
-            camera.aspect = container.clientWidth / container.clientHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
+            if (rendererRef.current !== currentRenderer || !container) return;
+            
+            const { clientWidth, clientHeight } = container;
+            const canvas = renderer.domElement;
+
+            // Check if the canvas size is different to avoid triggering a feedback loop
+            const needResize = canvas.width !== clientWidth || canvas.height !== clientHeight;
+            if (needResize) {
+                camera.aspect = clientWidth / clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(clientWidth, clientHeight);
+            }
         };
         const resizeObserver = new ResizeObserver(handleResize);
         resizeObserver.observe(container);

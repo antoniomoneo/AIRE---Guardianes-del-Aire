@@ -48,8 +48,11 @@ export const TrackControls: React.FC<TrackControlsProps> = ({ trackOptions, onUp
             <div className={`grid gap-2 ${isMelodic ? 'grid-cols-3' : 'grid-cols-1'}`}>
                 <select value={instrument} onChange={e => onUpdate({ instrument: e.target.value as Instrument })} className="w-full p-1 bg-gray-700 border border-gray-600 rounded-md text-xs truncate">
                     <option value="synthPad">Synth Pad</option>
-                    <option value="crystalPluck">Crystal Pluck</option>
-                    <option value="rhythmicKit">Rhythmic Kit</option>
+                    <option value="crystalPluck">Marimba</option>
+                    <option value="piano">Piano</option>
+                    <option value="strings">Cuerdas</option>
+                    <option value="flute">Flauta</option>
+                    <option value="rhythmicKit">Kit Rítmico</option>
                 </select>
                 {isMelodic && (
                     <>

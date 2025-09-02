@@ -1,14 +1,15 @@
 import p5 from 'p5';
-import * as Tone from 'tone';
 import WebMMuxer from 'webm-muxer';
 import type { SonificationOptions, P5SketchFunction, DashboardDataPoint, Pollutant } from '../types';
-import { renderSonification } from './sonification';
+import { buildNotes } from './sonification';
+import { ensureWAFReady, loadPreset, queueNote, instrumentPresets } from './webaudiofont';
 
 // Add declarations for WebCodecs API types to prevent TypeScript errors
 declare var VideoEncoder: any;
 declare var AudioEncoder: any;
 declare var VideoFrame: any;
 declare var AudioData: any;
+declare var OfflineAudioContext: any;
 
 
 interface ExportOptions {
@@ -32,13 +33,38 @@ export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
     const frameRate = 1 / sonificationOptions.stepDuration;
     const totalFrames = masterLength;
     const duration = totalFrames * sonificationOptions.stepDuration;
+    const sampleRate = 44100;
 
-    // 1. Render Audio using Tone.Offline
     onProgress(1);
-    const audioBuffer = await Tone.Offline(async () => {
-        renderSonification(dataByPollutant, { ...sonificationOptions, masterLength });
-        Tone.Transport.start();
-    }, duration);
+    
+    // 1. Render Audio using OfflineAudioContext + WebAudioFont
+    const offlineCtx = new OfflineAudioContext(2, Math.ceil(duration * sampleRate), sampleRate);
+    const { player } = await ensureWAFReady(offlineCtx);
+
+    const allNotes = buildNotes(dataByPollutant, { ...sonificationOptions, masterLength });
+    const requiredPresets = new Set(allNotes.map(n => n.presetName));
+    const presetObjects: Partial<Record<keyof typeof instrumentPresets, any>> = {};
+
+    for (const presetName of requiredPresets) {
+        presetObjects[presetName] = await loadPreset(offlineCtx, player, presetName);
+    }
+    
+    allNotes.forEach(note => {
+        const preset = presetObjects[note.presetName];
+        if (preset) {
+            queueNote({
+                context: offlineCtx, player, preset,
+                when: note.whenSec,
+                midi: note.midi,
+                duration: note.durationSec,
+                gain: note.gain,
+                destination: offlineCtx.destination,
+                isDrum: note.isDrum,
+            });
+        }
+    });
+
+    const audioBuffer = await offlineCtx.startRendering();
     onProgress(10);
     
     const tempContainer = document.createElement('div');

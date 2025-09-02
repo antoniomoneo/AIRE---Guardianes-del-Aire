@@ -1,8 +1,5 @@
-
-
 import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import p5 from 'p5';
-import * as Tone from 'tone';
 import { v4 as uuidv4 } from 'uuid';
 import type { AirQualityRecord, DashboardDataPoint, VisualizationOption, TrackOptions, Pollutant, Key, SonificationOptions, Instrument, Rhythm } from '../types';
 import { Pollutant as PollutantEnum } from '../types';
@@ -18,12 +15,13 @@ import { geometricSpiralSketch } from '../visualizations/geometricSpiral';
 import { starfieldSketch } from '../visualizations/starfield';
 import { glitchMatrixSketch } from '../visualizations/glitchMatrix';
 import { TrackControls } from './TrackControls';
-import { renderSonification } from '../utils/sonification';
+import { renderSonificationWAF } from '../utils/sonification';
 import { exportToVideo } from '../utils/videoExport';
 import { PublishModal } from './PublishModal';
 import { addGalleryItem } from '../utils/galleryService';
 import { awardPoints } from '../utils/scoringService';
 import { logoUrl } from '../utils/assets';
+import { getAudioContext } from '../utils/webaudiofont';
 
 interface CreationStudioProps {
   data: AirQualityRecord[];
@@ -62,21 +60,17 @@ const blobToDataURL = (blob: Blob): Promise<string> => {
 };
 
 export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, userName }) => {
-  // Common state
   const [startYear, setStartYear] = useState(MIN_YEAR);
   const [endYear, setEndYear] = useState(MAX_YEAR);
   const [title, setTitle] = useState('');
 
-  // Visual state
   const [visualPollutant, setVisualPollutant] = useState<Pollutant>(PollutantEnum.NO2);
   const [selectedVizId, setSelectedVizId] = useState<string>(VISUALIZATION_OPTIONS[0].id);
   
-  // Audio state
   const [tracks, setTracks] = useState<TrackOptions[]>([]);
   const [key, setKey] = useState<Key>('major');
   const [stepDuration, setStepDuration] = useState(0.25);
 
-  // Playback & Export state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
@@ -84,21 +78,22 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
 
-
-  // Refs
   const p5InstanceRef = useRef<p5 | null>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const currentFrameIndexRef = useRef(0);
+  const playbackRef = useRef<{ stop: () => void } | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
-  // Add a default track on mount
+
   useEffect(() => {
     if (tracks.length === 0) addTrack();
     const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handleKeyDown);
+    
     return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        Tone.Transport.stop();
-        Tone.Transport.cancel();
+        playbackRef.current?.stop();
+        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
   }, []);
 
@@ -126,88 +121,47 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
 
   const visualData = dataByPollutant[visualPollutant] || [];
 
-  // Reset generated video when parameters change
   useEffect(() => { setGeneratedVideo(null); }, [dataByPollutant, tracks, key, stepDuration, visualPollutant, selectedVizId, title]);
 
-    // p5 instance management for responsive canvas
     useLayoutEffect(() => {
         const viz = VISUALIZATION_OPTIONS.find(v => v.id === selectedVizId);
         const container = canvasWrapperRef.current;
         if (!viz || !container) return;
 
         let p5Instance: p5;
-        let resizeObserver: ResizeObserver;
-        let resizeRequestId: number | undefined;
-        let initialDrawTimeoutId: number | undefined;
-
         const sketchFunc = viz.sketch(visualData, { speed: 1 });
-
         const wrappedSketch = (p: p5) => {
             (p as any).getCurrentFrameIndex = () => currentFrameIndexRef.current;
-            p.setup = () => {
-                p.createCanvas(container.clientWidth, container.clientWidth).parent(container);
-                sketchFunc(p).setup();
-                p.noLoop();
-            };
+            p.setup = () => { p.createCanvas(container.clientWidth, container.clientWidth).parent(container); sketchFunc(p).setup(); p.noLoop(); };
             p.draw = () => { sketchFunc(p).draw(); };
         };
 
         p5Instance = new p5(wrappedSketch);
         p5InstanceRef.current = p5Instance;
-        const currentP5Instance = p5Instance; // Capture for currency check
-
-        const handleResize = () => {
-            // Currency check: ensure we only act on the current p5 instance
-            if (p5InstanceRef.current === currentP5Instance && container) {
-                const newSize = container.clientWidth;
-                currentP5Instance.resizeCanvas(newSize, newSize);
-                if (resizeRequestId) window.cancelAnimationFrame(resizeRequestId);
-                resizeRequestId = window.requestAnimationFrame(() => {
-                    // Double-check currency before redraw
-                    if (p5InstanceRef.current === currentP5Instance) {
-                       currentP5Instance.redraw();
-                    }
-                });
+        
+        const resizeObserver = new ResizeObserver(() => {
+            if (p5InstanceRef.current && container) {
+                p5InstanceRef.current.resizeCanvas(container.clientWidth, container.clientWidth);
+                p5InstanceRef.current.redraw();
             }
-        };
-
-        resizeObserver = new ResizeObserver(handleResize);
+        });
         resizeObserver.observe(container);
         
-        initialDrawTimeoutId = window.setTimeout(() => {
-             if (p5InstanceRef.current === currentP5Instance) currentP5Instance.redraw();
-        }, 50);
+        const initialDrawTimeout = setTimeout(() => { p5InstanceRef.current?.redraw(); }, 50);
 
         return () => {
-            // Capture the specific instance this effect created.
-            const instanceToCleanup = currentP5Instance;
-
-            // 1. Immediately invalidate the ref. Any pending Tone.js Draw callback
-            // that runs after this line will fail its currency check and exit.
-            if (p5InstanceRef.current === instanceToCleanup) {
-                p5InstanceRef.current = null;
-            }
-
-            // 2. Stop all asynchronous sources to prevent new callbacks.
-            if (resizeRequestId) window.cancelAnimationFrame(resizeRequestId);
-            if (initialDrawTimeoutId) clearTimeout(initialDrawTimeoutId);
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
+            playbackRef.current?.stop();
+            if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
             setIsPlaying(false);
             resizeObserver.disconnect();
-            
-            // 3. Forcefully remove the p5 instance and its canvas.
-            instanceToCleanup.remove();
+            clearTimeout(initialDrawTimeout);
+            p5Instance?.remove();
         };
     }, [selectedVizId, visualData]);
 
 
     const addTrack = () => {
-        const newTrack: TrackOptions = {
-            ...DEFAULT_TRACK,
-            id: uuidv4(),
-            pollutant: Object.values(PollutantEnum)[tracks.length % Object.values(PollutantEnum).length],
-        };
+        const newTrack: TrackOptions = { ...DEFAULT_TRACK, id: uuidv4(), pollutant: Object.values(PollutantEnum)[tracks.length % Object.values(PollutantEnum).length] };
         setTracks(prev => [...prev, newTrack]);
     };
     const removeTrack = (id: string) => setTracks(prev => prev.filter(t => t.id !== id));
@@ -217,39 +171,43 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
 
     const handlePlay = useCallback(async () => {
         if (isPlaying) {
-            Tone.Transport.stop();
+            playbackRef.current?.stop();
+            if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
             setIsPlaying(false);
             return;
         }
 
-        const p5ToUse = p5InstanceRef.current;
-        if (visualData.length === 0 || !p5ToUse) return;
+        if (visualData.length === 0) return;
         
-        await Tone.start();
+        getAudioContext().resume();
         setIsPlaying(true);
         currentFrameIndexRef.current = 0;
-        Tone.Transport.cancel();
         
-        renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
-        
+        playbackRef.current = await renderSonificationWAF(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
+
+        const p5ToUse = p5InstanceRef.current;
         const timelineLength = visualData.length;
-        for(let i = 0; i < timelineLength; i++){
-            Tone.Draw.schedule(() => {
-                // Currency check: only redraw if the p5 instance is still the one that started playback
-                if (p5InstanceRef.current === p5ToUse) {
-                    currentFrameIndexRef.current = i;
-                    p5ToUse.redraw();
+        const startedAt = performance.now() + 200; // Match audio start delay
+
+        function tick() {
+            const elapsedTimeSec = (performance.now() - startedAt) / 1000;
+            const newFrameIndex = Math.floor(elapsedTimeSec / stepDuration);
+
+            if (newFrameIndex < timelineLength) {
+                if (newFrameIndex !== currentFrameIndexRef.current) {
+                    currentFrameIndexRef.current = newFrameIndex;
+                    if (p5InstanceRef.current === p5ToUse) p5ToUse?.redraw();
                 }
-            }, i * stepDuration);
+                animationFrameRef.current = requestAnimationFrame(tick);
+            } else {
+                currentFrameIndexRef.current = timelineLength - 1;
+                if (p5InstanceRef.current === p5ToUse) p5ToUse?.redraw();
+                setIsPlaying(false);
+            }
         }
-        
-        Tone.Transport.scheduleOnce(() => {
-             setIsPlaying(false);
-        }, timelineLength * stepDuration);
+        animationFrameRef.current = requestAnimationFrame(tick);
 
-        Tone.Transport.start();
-    }, [isPlaying, dataByPollutant, sonificationOptions, visualData.length]);
-
+    }, [isPlaying, dataByPollutant, sonificationOptions, visualData.length, stepDuration]);
 
   const handleGenerateVideo = async () => {
     setIsRendering(true);
@@ -258,23 +216,12 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     try {
       const viz = VISUALIZATION_OPTIONS.find(v => v.id === selectedVizId);
       if (!viz) throw new Error("Visualización no encontrada.");
-
-      const blob = await exportToVideo({
-        sonificationOptions,
-        visualData,
-        dataByPollutant,
-        sketch: viz.sketch,
-        onProgress: setRenderProgress,
-        masterLength: visualData.length
-      });
-
+      const blob = await exportToVideo({ sonificationOptions, visualData, dataByPollutant, sketch: viz.sketch, onProgress: setRenderProgress, masterLength: visualData.length });
       setGeneratedVideo({ blob, url: URL.createObjectURL(blob) });
     } catch (error) {
         console.error("Failed to generate video:", error);
         alert("Hubo un error al generar el vídeo.");
-    } finally {
-        setIsRendering(false);
-    }
+    } finally { setIsRendering(false); }
   };
 
   const handlePublish = async (authorName: string) => {
@@ -283,13 +230,8 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     try {
         const videoDataUrl = await blobToDataURL(generatedVideo.blob);
         addGalleryItem({
-            type: 'audio-viz',
-            author: authorName,
-            title: title || 'Mi Creación Audiovisual',
-            videoDataUrl,
-            config: {
-                title, visualPollutant, selectedVizId, startYear, endYear, sonificationOptions
-            }
+            type: 'audio-viz', author: authorName, title: title || 'Mi Creación Audiovisual', videoDataUrl,
+            config: { title, visualPollutant, selectedVizId, startYear, endYear, sonificationOptions }
         });
         awardPoints(authorName, 100);
         alert('¡Publicado en la galería con éxito! (+100 Puntos)');
@@ -297,121 +239,120 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     } catch (error) {
         console.error("Error publishing to gallery:", error);
         alert("Hubo un error al publicar en la galería.");
-    } finally {
-        setIsPublishing(false);
-    }
+    } finally { setIsPublishing(false); }
   };
 
   return (
     <>
-    <div className="fixed inset-0 bg-gray-900 z-40 flex flex-col p-2 sm:p-4" onClick={onClose}>
-      <div className="w-full h-full bg-gray-900/90 border border-purple-500/30 rounded-2xl shadow-2xl p-4 sm:p-6 flex flex-col relative" onClick={e => e.stopPropagation()}>
-        <div className="flex justify-between items-center pb-4 border-b border-gray-700 flex-shrink-0">
-          <h2 className="text-xl sm:text-2xl font-orbitron text-purple-300">Audio & Viz Studio</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
-        </div>
-        
-        <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 pt-4">
-            {/* --- Left Sidebar --- */}
-            <div className="order-2 lg:order-1 w-full lg:w-[420px] lg:flex-shrink-0 space-y-6 overflow-y-auto pr-4 pb-4 min-h-0 lg:border-r lg:border-gray-700/50">
-                <section>
-                    <h3 className="text-lg font-orbitron text-purple-100 border-b border-purple-500/20 pb-2 mb-4">Controles Visuales</h3>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="font-bold text-gray-400 mb-2 block uppercase tracking-wider text-sm">Título</label>
-                            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Mi Creación Audiovisual"
-                            className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400" />
-                        </div>
-                        <div>
-                            <label className="font-bold text-gray-400 mb-2 block uppercase tracking-wider text-sm">Contaminante Visual</label>
-                            <select value={visualPollutant} onChange={(e) => setVisualPollutant(e.target.value as Pollutant)}
-                            className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400">
-                            {Object.values(PollutantEnum).map(p => <option key={p} value={p}>{POLLUTANT_NAMES[p]}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="font-bold text-gray-400 mb-2 block uppercase tracking-wider text-sm">Visualización</label>
-                            <select value={selectedVizId} onChange={(e) => setSelectedVizId(e.target.value)}
-                            className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400">
-                            {VISUALIZATION_OPTIONS.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                </section>
-
-                <section>
-                    <h3 className="text-lg font-orbitron text-cyan-100 border-b border-cyan-500/20 pb-2 mb-4">Controles Globales</h3>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="font-bold text-gray-400 mb-1 block text-center text-sm">Años: <span className="text-cyan-300 font-orbitron">{startYear} - {endYear}</span></label>
-                            <div className="flex gap-2">
-                                <input type="range" min={MIN_YEAR} max={MAX_YEAR} value={startYear} onChange={e => setStartYear(Math.min(parseInt(e.target.value), endYear))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"/>
-                                <input type="range" min={MIN_YEAR} max={MAX_YEAR} value={endYear} onChange={e => setEndYear(Math.max(parseInt(e.target.value), startYear))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"/>
+    <div className="fixed inset-0 bg-gray-900 z-40 flex flex-col p-2 sm:p-4 font-roboto" onClick={onClose}>
+        <div 
+            className="w-full h-full bg-gray-900/90 border border-purple-500/30 rounded-2xl shadow-2xl p-4 sm:p-6 flex flex-col relative overflow-y-auto sm:overflow-hidden pb-[env(safe-area-inset-bottom)]" 
+            onClick={e => e.stopPropagation()}
+            style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
+            <div className="flex justify-between items-center pb-4 border-b border-gray-700 flex-shrink-0">
+            <h2 className="text-xl sm:text-2xl font-orbitron text-purple-300">Audio & Viz Studio</h2>
+            <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
+            </div>
+            
+            <div className="flex-grow flex flex-col lg:flex-row gap-6 min-h-0 pt-4 overflow-y-auto lg:overflow-hidden">
+                <div className="order-2 lg:order-1 w-full lg:w-[420px] lg:flex-shrink-0 space-y-6 overflow-y-auto pr-2 lg:-mr-2 pb-4 min-h-0 lg:border-r lg:border-gray-700/50" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <section>
+                        <h3 className="text-lg font-orbitron text-purple-100 border-b border-purple-500/20 pb-2 mb-4">Controles Visuales</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="font-bold text-gray-400 mb-2 block uppercase tracking-wider text-sm">Título</label>
+                                <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Mi Creación Audiovisual"
+                                className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                            </div>
+                            <div>
+                                <label className="font-bold text-gray-400 mb-2 block uppercase tracking-wider text-sm">Contaminante Visual</label>
+                                <select value={visualPollutant} onChange={(e) => setVisualPollutant(e.target.value as Pollutant)}
+                                className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                {Object.values(PollutantEnum).map(p => <option key={p} value={p}>{POLLUTANT_NAMES[p]}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="font-bold text-gray-400 mb-2 block uppercase tracking-wider text-sm">Visualización</label>
+                                <select value={selectedVizId} onChange={(e) => setSelectedVizId(e.target.value)}
+                                className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400">
+                                {VISUALIZATION_OPTIONS.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                                </select>
                             </div>
                         </div>
-                        <div>
-                            <label className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Velocidad: <span className="text-green-300 font-orbitron">{(0.5 / stepDuration).toFixed(1)}x</span></label>
-                            <input type="range" min="0.1" max="1.0" step="0.05" value={stepDuration} onChange={e => setStepDuration(parseFloat(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" style={{direction: 'rtl'}}/>
-                        </div>
-                        <div>
-                            <label className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Tonalidad</label>
-                            <select value={key} onChange={e => setKey(e.target.value as Key)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400">
-                                <option value="major">Mayor (Alegre)</option>
-                                <option value="minor">Menor (Melancólica)</option>
-                            </select>
-                        </div>
-                    </div>
-                </section>
+                    </section>
 
-                <section>
-                    <h3 className="text-lg font-orbitron text-green-100 border-b border-green-500/20 pb-2 mb-4">Pistas de Audio</h3>
-                    <div className="flex flex-col space-y-2">
-                        {tracks.map((track) => (
-                            <TrackControls key={track.id} trackOptions={track} onUpdate={(opts) => updateTrack(track.id, opts)} onRemove={() => removeTrack(track.id)} allPollutantData={dataByPollutant}/>
-                        ))}
-                    </div>
-                    <button onClick={addTrack} className="w-full mt-4 font-bold py-2 px-4 border-2 border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition-all">
-                        + Añadir Pista de Audio
-                    </button>
-                </section>
-                
-                <div className="pt-4 border-t border-gray-700/50">
-                     <section>
-                        <h3 className="text-lg font-orbitron text-yellow-100 border-b border-yellow-500/20 pb-2 mb-4">Reproducir y Exportar</h3>
+                    <section>
+                        <h3 className="text-lg font-orbitron text-cyan-100 border-b border-cyan-500/20 pb-2 mb-4">Controles Globales</h3>
                         <div className="space-y-4">
-                            <button onClick={handlePlay} disabled={isRendering || tracks.length === 0 || visualData.length === 0} className="w-full font-bold py-3 px-4 bg-purple-600 rounded-lg hover:bg-purple-500 transition-all disabled:bg-gray-600 text-lg">
-                                {isPlaying ? 'DETENER' : 'REPRODUCIR'}
-                            </button>
-                            {!generatedVideo ? (
-                                <button onClick={handleGenerateVideo} disabled={isRendering || isPlaying || tracks.length === 0 || visualData.length === 0} className="w-full font-bold py-3 px-4 bg-cyan-600 rounded-lg hover:bg-cyan-500 transition-all disabled:bg-gray-600">
-                                    {isRendering ? `Renderizando Vídeo... ${renderProgress.toFixed(0)}%` : 'Generar Vídeo (con Audio)'}
-                                </button>
-                            ) : (
-                                <div className="space-y-2 pt-2">
-                                    <p className="text-center text-green-400 text-sm">¡Tu vídeo está listo!</p>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <a href={generatedVideo.url} download={`${title || 'aire-madrid'}.webm`} className="w-full block text-center font-bold py-2 px-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition-all text-sm">Descargar Vídeo</a>
-                                        <button onClick={() => setIsPublishModalOpen(true)} className="w-full font-bold py-2 px-2 bg-yellow-600 rounded-lg hover:bg-yellow-500 transition-all text-sm">Publicar en Galería</button>
-                                    </div>
+                            <div>
+                                <label className="font-bold text-gray-400 mb-1 block text-center text-sm">Años: <span className="text-cyan-300 font-orbitron">{startYear} - {endYear}</span></label>
+                                <div className="flex gap-2">
+                                    <input type="range" min={MIN_YEAR} max={MAX_YEAR} value={startYear} onChange={e => setStartYear(Math.min(parseInt(e.target.value), endYear))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"/>
+                                    <input type="range" min={MIN_YEAR} max={MAX_YEAR} value={endYear} onChange={e => setEndYear(Math.max(parseInt(e.target.value), startYear))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"/>
                                 </div>
-                            )}
+                            </div>
+                            <div>
+                                <label className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Velocidad: <span className="text-green-300 font-orbitron">{(0.5 / stepDuration).toFixed(1)}x</span></label>
+                                <input type="range" min="0.1" max="1.0" step="0.05" value={stepDuration} onChange={e => setStepDuration(parseFloat(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500" style={{direction: 'rtl'}}/>
+                            </div>
+                            <div>
+                                <label className="font-bold text-gray-400 mb-1 block uppercase tracking-wider text-sm">Tonalidad</label>
+                                <select value={key} onChange={e => setKey(e.target.value as Key)} className="w-full p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400">
+                                    <option value="major">Mayor (Alegre)</option>
+                                    <option value="minor">Menor (Melancólica)</option>
+                                </select>
+                            </div>
                         </div>
                     </section>
-                </div>
-            </div>
 
-            {/* --- Right Main Area --- */}
-            <div className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col items-center justify-center p-4 min-w-0 overflow-hidden">
-                <div className="flex items-center justify-start gap-3 px-2 pb-2 w-full">
-                    <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
-                    <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>
+                    <section>
+                        <h3 className="text-lg font-orbitron text-green-100 border-b border-green-500/20 pb-2 mb-4">Pistas de Audio</h3>
+                        <div className="flex flex-col space-y-2">
+                            {tracks.map((track) => (
+                                <TrackControls key={track.id} trackOptions={track} onUpdate={(opts) => updateTrack(track.id, opts)} onRemove={() => removeTrack(track.id)} allPollutantData={dataByPollutant}/>
+                            ))}
+                        </div>
+                        <button onClick={addTrack} className="w-full mt-4 font-bold py-2 px-4 border-2 border-dashed border-gray-600 text-gray-400 rounded-lg hover:bg-gray-800 hover:text-white transition-all">
+                            + Añadir Pista de Audio
+                        </button>
+                    </section>
+                    
+                    <div className="pt-4 border-t border-gray-700/50">
+                        <section>
+                            <h3 className="text-lg font-orbitron text-yellow-100 border-b border-yellow-500/20 pb-2 mb-4">Reproducir y Exportar</h3>
+                            <div className="space-y-4">
+                                <button onClick={handlePlay} disabled={isRendering || tracks.length === 0 || visualData.length === 0} className="w-full font-bold py-3 px-4 bg-purple-600 rounded-lg hover:bg-purple-500 transition-all disabled:bg-gray-600 text-lg">
+                                    {isPlaying ? 'DETENER' : 'REPRODUCIR'}
+                                </button>
+                                {!generatedVideo ? (
+                                    <button onClick={handleGenerateVideo} disabled={isRendering || isPlaying || tracks.length === 0 || visualData.length === 0} className="w-full font-bold py-3 px-4 bg-cyan-600 rounded-lg hover:bg-cyan-500 transition-all disabled:bg-gray-600">
+                                        {isRendering ? `Renderizando Vídeo... ${renderProgress.toFixed(0)}%` : 'Generar Vídeo (con Audio)'}
+                                    </button>
+                                ) : (
+                                    <div className="space-y-2 pt-2">
+                                        <p className="text-center text-green-400 text-sm">¡Tu vídeo está listo!</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <a href={generatedVideo.url} download={`${title || 'aire-madrid'}.webm`} className="w-full block text-center font-bold py-2 px-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition-all text-sm">Descargar Vídeo</a>
+                                            <button onClick={() => setIsPublishModalOpen(true)} className="w-full font-bold py-2 px-2 bg-yellow-600 rounded-lg hover:bg-yellow-500 transition-all text-sm">Publicar en Galería</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                    </div>
                 </div>
-                <div ref={canvasWrapperRef} className="w-full aspect-square bg-black rounded-lg shadow-lg shadow-purple-500/10">
-                    {/* P5 Canvas will be mounted here */}
+
+                <div className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col items-center justify-center p-4 min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-start gap-3 px-2 pb-2 w-full">
+                        <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
+                        <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>
+                    </div>
+                    <div ref={canvasWrapperRef} className="w-full aspect-square bg-black rounded-lg shadow-lg shadow-purple-500/10">
+                    </div>
                 </div>
             </div>
         </div>
-      </div>
     </div>
     {isPublishModalOpen && (
         <PublishModal
