@@ -1,13 +1,6 @@
 
-
-
-
-
-
-
-
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label } from 'recharts';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label, ResponsiveContainer } from 'recharts';
 import { awardPoints } from '../utils/scoringService';
 import type { AirQualityRecord, StationDailyAverage, StationLocation } from '../types';
 import { Pollutant } from '../types';
@@ -22,8 +15,8 @@ interface RealTimeDataProps {
   historicalData: AirQualityRecord[];
 }
 
-// Using a CORS proxy to prevent browser-side fetch errors.
-const DATASET_URL = "https://corsproxy.io/?https%3A%2F%2Fraw.githubusercontent.com%2Fantoniomoneo%2FDatasets%2Frefs%2Fheads%2Fmain%2Fdata%2Fcalair%2Flatest.flat.csv";
+const TARGET_RAW_URL = "https://raw.githubusercontent.com/antoniomoneo/Datasets/main/data/calair/latest.flat.csv";
+const DATASET_URL = "/api/proxy?url=" + encodeURIComponent(TARGET_RAW_URL);
 
 
 // FIX: Use 'as const' to infer literal types for keys, making PollutantCode a union of literals instead of string.
@@ -172,31 +165,6 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
     const [stationLocations, setStationLocations] = useState<StationLocation[]>([]);
 
     const hasAwardedPoints = useRef(false);
-    const [size, setSize] = useState({ width: 0, height: 0 });
-    const chartContainerRef = useRef<HTMLDivElement>(null);
-
-    useLayoutEffect(() => {
-        const container = chartContainerRef.current;
-        if (!container) return;
-
-        const observer = new ResizeObserver((entries) => {
-          const entry = entries[0];
-          if (entry) {
-            const newWidth = Math.round(entry.contentRect.width);
-            const newHeight = Math.round(entry.contentRect.height);
-            
-            setSize(currentSize => {
-                if (currentSize.width !== newWidth || currentSize.height !== newHeight) {
-                    return { width: newWidth, height: newHeight };
-                }
-                return currentSize;
-            });
-          }
-        });
-
-        observer.observe(container);
-        return () => observer.disconnect();
-    }, []);
 
     useEffect(() => {
         if (userName && !hasAwardedPoints.current) {
@@ -213,9 +181,25 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
             setLoading(true);
             setError(null);
             try {
-                const response = await fetch(DATASET_URL);
+                let response = await fetch(DATASET_URL); // Intento 1: Proxy
+                
                 if (!response.ok) {
-                    throw new Error(`Fallo en la red (${response.status})`);
+                    console.warn(`El proxy falló (${response.status}). Intentando acceso directo a ${TARGET_RAW_URL}`);
+                    response = await fetch(TARGET_RAW_URL); // Intento 2: Fallback directo
+                }
+
+                if (!response.ok) {
+                    let errorMessage = `Fallo en la red (${response.status})`;
+                    try {
+                        // El proxy puede enviar errores JSON, intentamos parsearlos para un mejor mensaje.
+                        const errorJson = await response.json();
+                        if (errorJson.error) {
+                            errorMessage = errorJson.error;
+                        }
+                    } catch (jsonError) {
+                        // La respuesta no era JSON, usar el mensaje de error HTTP original.
+                    }
+                    throw new Error(errorMessage);
                 }
                 const csvText = await response.text();
                 if (!csvText) {
@@ -440,16 +424,16 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
                 </div>
 
 
-                <div className="flex-grow min-h-0" ref={chartContainerRef}>
+                <div className="flex-grow min-h-0">
                     {loading ? (
                         <div className="flex items-center justify-center h-full text-gray-400">Cargando datos...</div>
                     ) : error ? (
                         <div className="flex items-center justify-center h-full text-center text-red-400">{error}</div>
                     ) : (
                         view === 'chart' ? (
-                            (size.width > 0 && size.height > 0) ? (
-                                chartData && chartData.length > 0 ? (
-                                    <LineChart width={size.width} height={size.height} data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                            chartData && chartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                                         <XAxis dataKey="hour" stroke="#9ca3af" tick={{ fontSize: 12 }} label={{ value: 'Hora del día', position: 'insideBottom', offset: -5, fill: '#9ca3af' }}/>
                                         <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={['auto', 'auto']} label={{ value: 'µg/m³', angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
@@ -476,12 +460,10 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
                                         </ReferenceLine>
                                         )}
                                     </LineChart>
+                                </ResponsiveContainer>
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-gray-500">No hay datos disponibles para la selección actual.</div>
                                 )
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-gray-400">Cargando gráfico...</div>
-                            )
                         ) : ( // Map View
                             // FIX: The Heatmap component does not support SO2 ('1'), as it relies on AQI.
                             // We show a message instead of rendering the map for this pollutant.

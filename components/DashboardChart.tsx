@@ -1,7 +1,7 @@
 
 
-import React, { useRef, useState, useLayoutEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, Label } from 'recharts';
+import React from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceLine, Label, ResponsiveContainer } from 'recharts';
 import type { DashboardDataPoint } from '../types';
 
 interface DashboardChartProps {
@@ -12,32 +12,6 @@ interface DashboardChartProps {
 }
 
 export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantName, overallAverage, last5YearsAverage }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        const newWidth = Math.round(entry.contentRect.width);
-        const newHeight = Math.round(entry.contentRect.height);
-
-        setSize(currentSize => {
-            if (currentSize.width !== newWidth || currentSize.height !== newHeight) {
-                 return { width: newWidth, height: newHeight };
-            }
-            return currentSize;
-        });
-      }
-    });
-
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
-
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400">
@@ -59,9 +33,9 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantN
   };
 
   return (
-    <div ref={containerRef} className="w-full h-full">
-        {size.width > 0 && size.height > 0 && (
-            <LineChart width={size.width} height={size.height} data={data} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
+    <div className="w-full h-full">
+      <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis 
                     dataKey="date" 
@@ -102,7 +76,7 @@ export const DashboardChart: React.FC<DashboardChartProps> = ({ data, pollutantN
                 </ReferenceLine>
                 )}
             </LineChart>
-        )}
+      </ResponsiveContainer>
     </div>
   );
 };

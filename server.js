@@ -81,6 +81,66 @@ app.post("/api/gemini/generate", async (req, res) => {
   }
 });
 
+// --- Generic Secure Proxy ---
+app.get("/api/proxy", async (req, res) => {
+  const targetUrl = req.query.url;
+
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).json({ error: "URL parameter is required." });
+  }
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(targetUrl);
+  } catch (error) {
+    return res.status(400).json({ error: "Invalid URL provided." });
+  }
+  
+  // Whitelist of allowed hosts for the proxy.
+  const allowedHosts = ['raw.githubusercontent.com', 'api.github.com'];
+  if (!allowedHosts.includes(parsedUrl.hostname)) {
+    return res.status(400).json({ error: `Host not allowed: ${parsedUrl.hostname}` });
+  }
+
+  try {
+    const fetchOptions = {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'AIRE-Guardianes/1.0 (+https://example.org)',
+        'Accept': req.headers.accept || 'text/plain',
+      }
+    };
+
+    const proxyResponse = await fetch(targetUrl, fetchOptions);
+    const responseBody = await proxyResponse.text();
+
+    res.status(proxyResponse.status);
+    res.type(proxyResponse.headers.get('content-type') || 'text/plain');
+    res.send(responseBody);
+    
+  } catch (error) {
+    console.error('Error in /api/proxy:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(502).json({ error: "Bad gateway", detail: message });
+  }
+});
+
+// --- Real Time Data Proxy ---
+const REAL_TIME_DATA_URL = "https://raw.githubusercontent.com/antoniomoneo/Datasets/refs/heads/main/data/calair/latest.flat.csv";
+app.get("/api/realtimedata", async (_req, res) => {
+  try {
+    const response = await fetch(REAL_TIME_DATA_URL);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch from GitHub: ${response.status} ${response.statusText}`);
+    }
+    const csvText = await response.text();
+    res.type('text/csv').send(csvText);
+  } catch (error) {
+    console.error('Error in /api/realtimedata proxy:', error);
+    res.status(502).json({ error: 'Error del proxy: no se pudo obtener los datos de calidad del aire.' });
+  }
+});
+
 // Serve static files from the Vite build output
 app.use(express.static(path.join(__dirname, "dist")));
 

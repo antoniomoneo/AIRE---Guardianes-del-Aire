@@ -1,6 +1,7 @@
 
-import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { AirQualityRecord, DashboardDataPoint, Pollutant } from '../types';
 import { Pollutant as PollutantEnum } from '../types';
 import { POLLUTANT_NAMES } from '../constants';
@@ -50,31 +51,6 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
     const [isPublished, setIsPublished] = useState(false);
 
     const hasAwardedPoints = useRef(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [size, setSize] = useState({ width: 0, height: 0 });
-
-    useLayoutEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const observer = new ResizeObserver((entries) => {
-            const entry = entries[0];
-            if (entry) {
-                const newWidth = Math.round(entry.contentRect.width);
-                const newHeight = Math.round(entry.contentRect.height);
-                
-                setSize(currentSize => {
-                    if (currentSize.width !== newWidth || currentSize.height !== newHeight) {
-                        return { width: newWidth, height: newHeight };
-                    }
-                    return currentSize;
-                });
-            }
-        });
-
-        observer.observe(container);
-        return () => observer.disconnect();
-    }, []);
     
     useEffect(() => {
         if (userName && !hasAwardedPoints.current) {
@@ -97,7 +73,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
             acc[year].sum += value;
             acc[year].count++;
             return acc;
-        }, {} as Record<string, { sum: number, count: number }>);
+        }, {} as Record<string, { sum: number; count: number }>);
 
         return Object.entries(annualData).map(([year, { sum, count }]) => ({
             date: year,
@@ -261,24 +237,26 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                     </div>
 
                     <div className="flex-1 min-h-0 flex flex-col">
-                        <div ref={containerRef} className="flex-grow min-h-0 flex flex-col">
+                        <div className="flex-grow min-h-0 flex flex-col">
                             <h3 className="text-center font-orbitron text-indigo-200 mb-4 flex-shrink-0 text-lg">
                             Evolución de {POLLUTANT_NAMES[selectedPollutant]}
                             </h3>
-                            {size.width > 0 && size.height > 0 && (
-                                <LineChart width={size.width} height={size.height - 40} data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                    <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                                    <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: `µg/m³`, angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
-                                        labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
-                                    />
-                                    <Legend />
-                                    <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} connectNulls />
-                                    <Line type="monotone" dataKey="simulated" name={simulationName} stroke={simulationColor} strokeWidth={3} strokeDasharray="5 5" dot={false} connectNulls />
-                                </LineChart>
-                            )}
+                            <div className="flex-grow min-h-0">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={combinedData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                                        <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 12 }} />
+                                        <YAxis stroke="#9ca3af" tick={{ fontSize: 12 }} domain={[0, 'auto']} label={{ value: `µg/m³`, angle: -90, position: 'insideLeft', fill: '#9ca3af' }}/>
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: 'rgba(31, 41, 55, 0.8)', borderColor: '#818cf8' }}
+                                            labelStyle={{ color: '#c7d2fe', fontWeight: 'bold' }}
+                                        />
+                                        <Legend />
+                                        <Line type="monotone" dataKey="real" name="Realidad Histórica" stroke="#38bdf8" strokeWidth={3} dot={false} connectNulls />
+                                        <Line type="monotone" dataKey="simulated" name={simulationName} stroke={simulationColor} strokeWidth={3} strokeDasharray="5 5" dot={false} connectNulls />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
                         </div>
                         <div className="flex-shrink-0 mt-4">
                             {aiExplanation ? (

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { awardPoints } from '../utils/scoringService';
@@ -9,8 +10,17 @@ interface ParticipaProps {
   userName: string;
 }
 
-const PROPOSALS_URL = "https://corsproxy.io/?" + encodeURIComponent("https://raw.githubusercontent.com/antoniomoneo/Datasets/refs/heads/main/decide-madrid/proposals_latest%20copia.csv");
-const DEBATES_URL = "https://corsproxy.io/?" + encodeURIComponent("https://decide.madrid.es/system/api/debates.csv");
+const PROPOSALS_RAW_URL = "https://raw.githubusercontent.com/antoniomoneo/Datasets/main/decide-madrid/proposals_latest.csv";
+const PROPOSALS_RAW_URL_FALLBACK = "https://raw.githubusercontent.com/antoniomoneo/Datasets/main/decide-madrid/proposals_latest%20copia.csv";
+
+const PROPOSALS_URLS = [
+    "/api/proxy?url=" + encodeURIComponent(PROPOSALS_RAW_URL),
+    "/api/proxy?url=" + encodeURIComponent(PROPOSALS_RAW_URL_FALLBACK),
+    PROPOSALS_RAW_URL,
+    PROPOSALS_RAW_URL_FALLBACK
+];
+
+const DEBATES_URL = "/api/proxy?url=" + encodeURIComponent("https://decide.madrid.es/system/api/debates.csv");
 
 
 const AIR_QUALITY_KEYWORDS = [
@@ -126,6 +136,27 @@ const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): Participa
     }
 };
 
+/**
+ * Tries to fetch from a list of URLs and returns the first successful response.
+ * @param urls An array of URLs to try in order.
+ * @returns A promise that resolves with the first successful Response object.
+ * @throws An error if all fetch attempts fail.
+ */
+async function fetchFirstOk(urls: string[]): Promise<Response> {
+    for (const url of urls) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                return response;
+            }
+            console.warn(`Falló la carga de la propuesta: ${response.status}`, url);
+        } catch (error) {
+            console.warn(`Error de red al cargar la propuesta:`, url, error);
+        }
+    }
+    throw new Error("No se pudieron cargar las propuestas (fuentes agotadas).");
+}
+
 
 const filterByKeywords = (items: ParticipationItem[]): ParticipationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -177,11 +208,18 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
             setCurrentPage(1);
             setAiFilteredIds(null);
             setActiveQuickFilter('all');
-            const url = activeTab === 'proposals' ? PROPOSALS_URL : DEBATES_URL;
+            
             try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(`Error en la red: ${response.statusText}`);
-                const csvText = await response.text();
+                let csvText;
+                if (activeTab === 'proposals') {
+                    const response = await fetchFirstOk(PROPOSALS_URLS);
+                    csvText = await response.text();
+                } else { // 'debates'
+                    const response = await fetch(DEBATES_URL);
+                    if (!response.ok) throw new Error(`Error en la red: ${response.statusText}`);
+                    csvText = await response.text();
+                }
+
                 const rawItems = parseCsvData(csvText, activeTab);
                 const filteredItems = filterByKeywords(rawItems);
                 setItems(filteredItems);

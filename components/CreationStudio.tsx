@@ -137,7 +137,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
 
         let p5Instance: p5;
         let resizeObserver: ResizeObserver;
-        let resizeTimeoutId: number | undefined;
+        let resizeRequestId: number | undefined;
         let initialDrawTimeoutId: number | undefined;
 
         const sketchFunc = viz.sketch(visualData, { speed: 1 });
@@ -161,13 +161,13 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             if (p5InstanceRef.current === currentP5Instance && container) {
                 const newSize = container.clientWidth;
                 currentP5Instance.resizeCanvas(newSize, newSize);
-                if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
-                resizeTimeoutId = window.setTimeout(() => {
+                if (resizeRequestId) window.cancelAnimationFrame(resizeRequestId);
+                resizeRequestId = window.requestAnimationFrame(() => {
                     // Double-check currency before redraw
                     if (p5InstanceRef.current === currentP5Instance) {
                        currentP5Instance.redraw();
                     }
-                }, 0);
+                });
             }
         };
 
@@ -189,7 +189,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             }
 
             // 2. Stop all asynchronous sources to prevent new callbacks.
-            if (resizeTimeoutId) clearTimeout(resizeTimeoutId);
+            if (resizeRequestId) window.cancelAnimationFrame(resizeRequestId);
             if (initialDrawTimeoutId) clearTimeout(initialDrawTimeoutId);
             Tone.Transport.stop();
             Tone.Transport.cancel();
