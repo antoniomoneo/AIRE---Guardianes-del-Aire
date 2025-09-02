@@ -2,6 +2,7 @@
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,34 +16,33 @@ app.use(express.json({ limit: "2mb" }));
 // Healthcheck simple
 app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));
 
-// Proxy mínimo a Gemini
-// Espera body tipo: { model: "gemini-1.5-flash", contents: [...], ... }
+// Initialize Gemini client if API key is available
+let ai;
+if (process.env.API_KEY) {
+  ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+} else {
+  console.warn("API_KEY environment variable not set. The /api/gemini/generate endpoint will not work.");
+}
+
+
+// Proxy a Gemini usando el SDK @google/genai
 app.post("/api/gemini/generate", async (req, res) => {
+  if (!ai) {
+    return res.status(500).json({ error: "API_KEY no configurada en el servidor." });
+  }
+  
   try {
-    const API_KEY = process.env.GEMINI_API_KEY;
-    if (!API_KEY) {
-      return res
-        .status(500)
-        .json({ error: "GEMINI_API_KEY no configurada" });
-    }
-
-    const { model = "gemini-2.5-flash", ...rest } = req.body || {};
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model
-    )}:generateContent?key=${API_KEY}`;
-
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(rest)
-    });
-
-    const ct = r.headers.get("content-type") || "application/json";
-    const txt = await r.text(); // devolvemos tal cual
-    res.status(r.status).type(ct).send(txt);
+    // El cuerpo de la petición del frontend (req.body) debe coincidir
+    // con los parámetros de ai.models.generateContent(), que incluye 'model', 'contents', y 'config'.
+    const response = await ai.models.generateContent(req.body);
+    
+    // La respuesta del SDK es un objeto JSON que el frontend puede parsear directamente.
+    res.status(200).json(response);
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: String(e) });
+    console.error("Error calling Gemini API:", e);
+    const statusCode = e.status || 500;
+    const message = e.message || String(e);
+    res.status(statusCode).json({ error: message });
   }
 });
 

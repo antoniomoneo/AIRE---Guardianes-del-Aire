@@ -9,8 +9,8 @@ interface ParticipaProps {
   userName: string;
 }
 
-const PROPOSALS_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://decide.madrid.es/system/api/proposals.csv");
-const DEBATES_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent("https://decide.madrid.es/system/api/debates.csv");
+const PROPOSALS_URL = "https://corsproxy.io/?" + encodeURIComponent("https://raw.githubusercontent.com/antoniomoneo/Datasets/refs/heads/main/decide-madrid/proposals_latest%20copia.csv");
+const DEBATES_URL = "https://corsproxy.io/?" + encodeURIComponent("https://decide.madrid.es/system/api/debates.csv");
 
 
 const AIR_QUALITY_KEYWORDS = [
@@ -18,6 +18,21 @@ const AIR_QUALITY_KEYWORDS = [
     'zbe', 'bici', 'bicicleta', 'movilidad', 'sostenible', 'verde', 
     'ecológico', 'clima', 'climático', 'polución', 'peatonal', 'árboles'
 ];
+
+// Helper function to parse a line with a specific delimiter, handling quotes.
+const parseCsvLine = (line: string, delimiter: string): string[] => {
+    // Regex to split by delimiter, but not when it's inside quotes.
+    const regex = new RegExp(`${delimiter}(?=(?:[^"]*"[^"]*")*[^"]*$)`);
+    const values = line.split(regex);
+    // Clean up each value: trim whitespace, remove surrounding quotes, and handle double quotes.
+    return values.map(v => {
+        let cleanV = v.trim();
+        if (cleanV.startsWith('"') && cleanV.endsWith('"')) {
+            cleanV = cleanV.slice(1, -1);
+        }
+        return cleanV.replace(/""/g, '"');
+    });
+};
 
 const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): ParticipationItem[] => {
     try {
@@ -30,52 +45,66 @@ const parseCsvData = (csvText: string, type: 'proposals' | 'debates'): Participa
         let headerLine = lines.shift()?.trim().toLowerCase();
         if (!headerLine) return [];
 
-        if (headerLine.charCodeAt(0) === 0xFEFF) { // BOM
+        // Handle Byte Order Mark (BOM)
+        if (headerLine.charCodeAt(0) === 0xFEFF) {
             headerLine = headerLine.substring(1);
         }
 
+        // Auto-detect delimiter
         const semicolonCount = (headerLine.match(/;/g) || []).length;
         const commaCount = (headerLine.match(/,/g) || []).length;
-        const delimiter = commaCount > semicolonCount ? ',' : ';';
+        let delimiter = commaCount > semicolonCount ? ',' : ';';
 
-        const parseLineWithDelimiter = (line: string): string[] => {
-            const regex = new RegExp(`${delimiter}(?=(?:[^"]*"[^"]*")*[^"]*$)`);
-            const values = line.split(regex);
-            return values.map(v => {
-                let cleanV = v.trim();
-                if (cleanV.startsWith('"') && cleanV.endsWith('"')) {
-                    cleanV = cleanV.slice(1, -1);
-                }
-                return cleanV.replace(/""/g, '"');
-            });
-        };
+        let header = parseCsvLine(headerLine, delimiter);
         
-        const header = parseLineWithDelimiter(headerLine);
-        
-        const idIndex = header.indexOf('id');
-        const titleIndex = header.indexOf('title');
-        let descIndex = header.indexOf('description');
-        if (descIndex === -1) descIndex = header.indexOf('summary');
-        const votesIndex = header.indexOf('cached_votes_up');
-        const linkIndex = type === 'proposals' ? header.indexOf('proposal_url') : header.indexOf('debate_url');
+        // Define a function to check if the header is valid by finding column indices
+        const getHeaderIndices = (h: string[]) => ({
+            idIndex: h.indexOf('id'),
+            titleIndex: h.indexOf('title'),
+            descIndex: h.indexOf('description') !== -1 ? h.indexOf('description') : h.indexOf('summary'),
+            votesIndex: h.indexOf('cached_votes_up'),
+        });
 
-        if (idIndex === -1 || titleIndex === -1 || descIndex === -1 || linkIndex === -1) {
-            console.error('CSV header is missing required columns.', {header, idIndex, titleIndex, descIndex, linkIndex, delimiter});
-            throw new Error("El formato del archivo de datos ha cambiado y no se puede procesar.");
+        let indices = getHeaderIndices(header);
+        let headerIsValid = indices.idIndex !== -1 && indices.titleIndex !== -1 && indices.descIndex !== -1;
+
+        // If header is not valid with the detected delimiter, try the other one as a fallback
+        if (!headerIsValid) {
+            const otherDelimiter = delimiter === ';' ? ',' : ';';
+            const otherHeader = parseCsvLine(headerLine, otherDelimiter);
+            const otherIndices = getHeaderIndices(otherHeader);
+
+            if (otherIndices.idIndex !== -1 && otherIndices.titleIndex !== -1 && otherIndices.descIndex !== -1) {
+                delimiter = otherDelimiter;
+                header = otherHeader;
+                indices = otherIndices;
+            } else {
+                // If both delimiters fail, then the format is truly unexpected.
+                console.error('CSV header is missing required columns with both comma and semicolon delimiters.', { originalHeader: headerLine, required: ['id', 'title', 'description/summary'] });
+                throw new Error("El formato del archivo de datos ha cambiado y no se puede procesar.");
+            }
         }
+
+        const { idIndex, titleIndex, descIndex, votesIndex } = indices;
 
         return lines.map(line => {
             if (!line.trim()) return null;
-            const values = parseLineWithDelimiter(line);
+            const values = parseCsvLine(line, delimiter);
             if (values.length < header.length) return null;
             
+            const id = values[idIndex];
+            if (!id) return null;
+
             const votes = votesIndex !== -1 ? parseInt(values[votesIndex], 10) || 0 : 0;
+            // Construct the link manually as the URL field is no longer in the CSV
+            const link = `https://decide.madrid.es/${type}/${id}`;
+
             return {
-                id: values[idIndex] || uuidv4(),
+                id: id,
                 title: values[titleIndex] || '',
                 description: values[descIndex] || '',
                 cached_votes_up: votes,
-                link: values[linkIndex] || '',
+                link: link,
             };
         }).filter((item): item is ParticipationItem => item !== null && !!item.id && !!item.title && !!item.link);
     } catch (e) {

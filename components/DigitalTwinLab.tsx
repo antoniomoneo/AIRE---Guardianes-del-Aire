@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import type { AirQualityRecord, DashboardDataPoint, Pollutant } from '../types';
@@ -198,7 +195,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                 <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 pt-4">
                      <div className="lg:w-1/3 xl:w-2/5 space-y-6 overflow-y-auto pr-4 pb-4 flex-shrink-0">
                         <section>
-                            <label htmlFor="pollutant-select" className="text-lg font-bold text-gray-300">1. Contaminante a Analizar</label>
+                            <label htmlFor="pollutant-select" className="text-lg font-bold text-gray-300">1. Selecciona contaminante</label>
                             <select
                                 id="pollutant-select"
                                 value={selectedPollutant}
@@ -210,9 +207,29 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                                 ))}
                             </select>
                         </section>
+
+                         <section className="pt-6 border-t border-gray-700">
+                             <label htmlFor="scenario-select" className="text-lg font-bold text-gray-300">2. Explora un escenario predefinido</label>
+                             <select
+                                id="scenario-select"
+                                value={aiSimulatedData ? 'ai_custom' : selectedScenario}
+                                onChange={(e) => {
+                                    if (e.target.value !== 'ai_custom') {
+                                        handleSelectScenario(e.target.value as ScenarioId);
+                                    }
+                                }}
+                                className="w-full mt-2 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                disabled={isLoadingAI}
+                            >
+                                {aiSimulatedData && <option value="ai_custom" disabled>{`IA: ${userInput.substring(0, 25)}...`}</option>}
+                                {Object.entries(SCENARIOS).map(([id, { name }]) => (
+                                    <option key={id} value={id}>{name}</option>
+                                ))}
+                            </select>
+                        </section>
                         
                         <section className="pt-6 border-t border-gray-700">
-                            <h3 className="text-lg font-bold text-green-300">2. Crea tu Propio Escenario (IA)</h3>
+                            <h3 className="text-lg font-bold text-green-300">3. Formula tu propia hipótesis (IA)</h3>
                             <p className="text-sm text-gray-400 mt-1 mb-3">Describe una situación hipotética y nuestra IA generará una simulación. ¡Sé creativo!</p>
                             <textarea
                                 value={userInput}
@@ -239,26 +256,6 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
                                     {isPublished ? 'Publicado ✓' : 'Publicar en Galería (+500 Pts)'}
                                 </button>
                             )}
-                        </section>
-
-                         <section className="pt-6 border-t border-gray-700">
-                             <label htmlFor="scenario-select" className="text-lg font-bold text-gray-300">3. O explora un escenario predefinido</label>
-                             <select
-                                id="scenario-select"
-                                value={aiSimulatedData ? 'ai_custom' : selectedScenario}
-                                onChange={(e) => {
-                                    if (e.target.value !== 'ai_custom') {
-                                        handleSelectScenario(e.target.value as ScenarioId);
-                                    }
-                                }}
-                                className="w-full mt-2 p-2 bg-gray-800 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                                disabled={isLoadingAI}
-                            >
-                                {aiSimulatedData && <option value="ai_custom" disabled>{`IA: ${userInput.substring(0, 25)}...`}</option>}
-                                {Object.entries(SCENARIOS).map(([id, { name }]) => (
-                                    <option key={id} value={id}>{name}</option>
-                                ))}
-                            </select>
                         </section>
 
                     </div>

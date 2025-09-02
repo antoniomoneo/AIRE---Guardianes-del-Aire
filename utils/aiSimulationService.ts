@@ -71,7 +71,7 @@ export const generateScenarioWithAI = async (
             body: JSON.stringify({
                 model: 'gemini-2.5-flash',
                 contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-                generationConfig: {
+                config: {
                     responseMimeType: 'application/json',
                     responseSchema: responseSchema,
                 },
