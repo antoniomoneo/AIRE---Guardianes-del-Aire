@@ -162,14 +162,21 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-            <div className="bg-gray-900/90 border border-indigo-500/30 rounded-2xl shadow-2xl w-full max-w-6xl h-full sm:h-[90vh] p-4 sm:p-6 flex flex-col relative" onClick={e => e.stopPropagation()}>
+            <div 
+                className="bg-gray-900/90 border border-indigo-500/30 rounded-2xl shadow-2xl w-full max-w-6xl h-full sm:h-[90vh] p-4 sm:p-6 flex flex-col relative overflow-y-auto pb-[env(safe-area-inset-bottom)]" 
+                onClick={e => e.stopPropagation()}
+                style={{ WebkitOverflowScrolling: 'touch' }}
+            >
                 <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700 flex-shrink-0">
                     <h2 className="text-xl sm:text-2xl font-orbitron text-indigo-300">Laboratorio de Escenarios</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
                 </div>
                 
                 <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 pt-4">
-                     <div className="lg:w-1/3 xl:w-2/5 space-y-6 overflow-y-auto pr-4 pb-4 flex-shrink-0">
+                     <div 
+                        className="lg:w-1/3 xl:w-2/5 space-y-6 overflow-y-auto pr-4 lg:pr-8 lg:-mr-4 pb-4 flex-shrink-0"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                    >
                         <section>
                             <label htmlFor="pollutant-select" className="text-lg font-bold text-gray-300">1. Selecciona contaminante</label>
                             <select
@@ -236,7 +243,7 @@ export const DigitalTwinLab: React.FC<DigitalTwinLabProps> = ({ data, onClose, u
 
                     </div>
 
-                    <div className="flex-1 min-h-0 flex flex-col">
+                    <div className="flex-1 min-h-0 flex flex-col min-h-[50vh]">
                         <div className="flex-grow min-h-0 flex flex-col">
                             <h3 className="text-center font-orbitron text-indigo-200 mb-4 flex-shrink-0 text-lg">
                             Evolución de {POLLUTANT_NAMES[selectedPollutant]}

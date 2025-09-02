@@ -1,4 +1,4 @@
-// Server Express: sirve dist y expone /api/gemini/generate
+// Server Express: sirve dist y expone APIs seguras
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,14 +10,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Body parser
-app.use(express.json({ limit: "50mb" })); // Increased limit for larger media in gallery
+// Confía en el primer proxy (ej. Nginx, Google Cloud Run) para obtener la IP real.
+app.set('trust proxy', true);
 
-// Healthcheck simple
-app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));
+// Body parser para JSON, con límite aumentado para subidas a la galería.
+app.use(express.json({ limit: "50mb" }));
 
-// --- GitHub API Proxy ---
-// This proxy centralizes all GitHub API interactions, keeping the token secure on the server.
+// Healthcheck para el orquestador (ej. Kubernetes, Cloud Run).
+app.get(["/health", "/healthz"], (_req, res) => res.status(200).json({ ok: true }));
+
+// --- Proxy de la API de GitHub para la Galería ---
+// Proxy para todas las interacciones (lectura y escritura) con el repo de la galería.
+// Centraliza el uso del GITHUB_TOKEN de forma segura en el backend.
 const GITHUB_API_URL = 'https://api.github.com/repos/antoniomoneo/Aire-gallery/contents';
 
 app.all('/api/github/*', async (req, res) => {
@@ -29,13 +33,13 @@ app.all('/api/github/*', async (req, res) => {
     const targetUrl = `${GITHUB_API_URL}/${githubPath}`;
 
     try {
-        const fetchOptions: RequestInit = {
+        const fetchOptions = {
             method: req.method,
             headers: {
                 'Accept': 'application/vnd.github.v3+json',
                 'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
-                'User-Agent': 'A.I.R.E-App-Proxy/1.0',
-            }
+                'User-Agent': 'AIRE-Guardianes/1.0',
+            },
         };
 
         if (req.method !== 'GET' && req.body && Object.keys(req.body).length > 0) {
@@ -44,7 +48,7 @@ app.all('/api/github/*', async (req, res) => {
         }
         
         const githubResponse = await fetch(targetUrl, fetchOptions);
-        const responseBody = await githubResponse.text(); // Read body once
+        const responseBody = await githubResponse.text();
         
         res.status(githubResponse.status);
         res.type(githubResponse.headers.get('content-type') || 'text/plain');
@@ -52,12 +56,13 @@ app.all('/api/github/*', async (req, res) => {
 
     } catch (error) {
         console.error('Error en el proxy de GitHub API:', error);
-        res.status(502).json({ error: 'Error del proxy: no se pudo contactar con la API de GitHub.' });
+        const detail = error instanceof Error ? error.message : String(error);
+        res.status(502).json({ error: 'Bad gateway', detail });
     }
 });
 
 
-// --- Gemini API Proxy ---
+// --- Proxy de la API de Gemini ---
 let ai;
 if (process.env.API_KEY) {
   ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -81,7 +86,7 @@ app.post("/api/gemini/generate", async (req, res) => {
   }
 });
 
-// --- Generic Secure Proxy ---
+// --- Proxy de solo lectura (whitelist) para CSV/JSON externos ---
 app.get("/api/proxy", async (req, res) => {
   const targetUrl = req.query.url;
 
@@ -96,8 +101,8 @@ app.get("/api/proxy", async (req, res) => {
     return res.status(400).json({ error: "Invalid URL provided." });
   }
   
-  // Whitelist of allowed hosts for the proxy.
-  const allowedHosts = ['raw.githubusercontent.com', 'api.github.com'];
+  // Whitelist de hosts permitidos para el proxy.
+  const allowedHosts = ['raw.githubusercontent.com', 'api.github.com', 'decide.madrid.es'];
   if (!allowedHosts.includes(parsedUrl.hostname)) {
     return res.status(400).json({ error: `Host not allowed: ${parsedUrl.hostname}` });
   }
@@ -120,35 +125,47 @@ app.get("/api/proxy", async (req, res) => {
     
   } catch (error) {
     console.error('Error in /api/proxy:', error);
-    const message = error instanceof Error ? error.message : String(error);
-    res.status(502).json({ error: "Bad gateway", detail: message });
+    const detail = error instanceof Error ? error.message : String(error);
+    res.status(502).json({ error: "Bad gateway", detail });
   }
 });
 
-// --- Real Time Data Proxy ---
-const REAL_TIME_DATA_URL = "https://raw.githubusercontent.com/antoniomoneo/Datasets/refs/heads/main/data/calair/latest.flat.csv";
-app.get("/api/realtimedata", async (_req, res) => {
-  try {
-    const response = await fetch(REAL_TIME_DATA_URL);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch from GitHub: ${response.status} ${response.statusText}`);
-    }
-    const csvText = await response.text();
-    res.type('text/csv').send(csvText);
-  } catch (error) {
-    console.error('Error in /api/realtimedata proxy:', error);
-    res.status(502).json({ error: 'Error del proxy: no se pudo obtener los datos de calidad del aire.' });
-  }
-});
 
-// Serve static files from the Vite build output
-app.use(express.static(path.join(__dirname, "dist")));
+// --- Servir Ficheros Estáticos y SPA Fallback ---
 
-// SPA fallback: redirect all other requests to index.html
+// Servir ficheros estáticos de la build de Vite con caché moderada.
+app.use(express.static(path.join(__dirname, "dist"), {
+  maxAge: '1h', // Cache de 1 hora
+  etag: true,
+  fallthrough: true
+}));
+
+// SPA fallback: redirige cualquier otra petición a index.html.
 app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+
+// --- Arranque del Servidor y Apagado Limpio ---
+
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Servidor iniciado en http://0.0.0.0:${PORT}`);
 });
+
+const gracefulShutdown = (signal: string) => {
+  console.log(`${signal} received. Shutting down gracefully...`);
+  server.close(() => {
+    console.log('HTTP server closed.');
+    process.exit(0);
+  });
+
+  // Forzar apagado tras 10s si las conexiones no se cierran.
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down.');
+    process.exit(1);
+  }, 10 * 1000);
+};
+
+// Escuchar señales de apagado
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

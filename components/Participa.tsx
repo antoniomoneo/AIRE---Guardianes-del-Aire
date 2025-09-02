@@ -157,6 +157,26 @@ async function fetchFirstOk(urls: string[]): Promise<Response> {
     throw new Error("No se pudieron cargar las propuestas (fuentes agotadas).");
 }
 
+/**
+ * Decodes an ArrayBuffer into a string, trying multiple common encodings.
+ * @param buf The ArrayBuffer to decode.
+ * @returns The decoded string.
+ */
+function decodeSmart(buf: ArrayBuffer): string {
+    const tryDecode = (enc: string) => new TextDecoder(enc, { fatal: false }).decode(buf);
+    const hasManyRepl = (s: string) => (s.match(/\uFFFD/g)?.length || 0) > 2;
+
+    let t = tryDecode('utf-8');
+    if (!hasManyRepl(t)) return t;
+
+    console.warn("UTF-8 decoding resulted in replacement characters, trying windows-1252.");
+    t = tryDecode('windows-1252');
+    if (!hasManyRepl(t)) return t;
+    
+    console.warn("windows-1252 decoding also resulted in replacement characters, trying iso-8859-1.");
+    return tryDecode('iso-8859-1');
+}
+
 
 const filterByKeywords = (items: ParticipationItem[]): ParticipationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -213,11 +233,13 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
                 let csvText;
                 if (activeTab === 'proposals') {
                     const response = await fetchFirstOk(PROPOSALS_URLS);
-                    csvText = await response.text();
+                    const buffer = await response.arrayBuffer();
+                    csvText = decodeSmart(buffer);
                 } else { // 'debates'
                     const response = await fetch(DEBATES_URL);
                     if (!response.ok) throw new Error(`Error en la red: ${response.statusText}`);
-                    csvText = await response.text();
+                    const buffer = await response.arrayBuffer();
+                    csvText = decodeSmart(buffer);
                 }
 
                 const rawItems = parseCsvData(csvText, activeTab);
