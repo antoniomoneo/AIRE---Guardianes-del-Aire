@@ -1,7 +1,3 @@
-
-
-
-
 import { v4 as uuidv4 } from 'uuid';
 import type { GalleryItem, AudioVizGalleryItem, Model3DGalleryItem, InsightGalleryItem, AIScenarioGalleryItem } from '../types';
 import { awardPoints } from './scoringService';
@@ -16,9 +12,9 @@ const FOLDER_MAP: Record<GalleryItem['type'], string> = {
     'ai-scenario': 'ai-scenarios',
 };
 
-// Helper for GitHub API requests via our own proxy
+// Helper for GitHub API requests via our own secure server proxy
 async function githubApiRequest(path: string, options: RequestInit = {}) {
-    const url = `/api/github/${path}`; // Use our new proxy endpoint
+    const url = `/api/github/${path}`;
 
     const headers: Record<string, string> = {
         'Accept': 'application/json',
@@ -28,20 +24,17 @@ async function githubApiRequest(path: string, options: RequestInit = {}) {
         headers['Content-Type'] = 'application/json';
     }
 
-    if (options.headers) {
-        Object.assign(headers, options.headers);
-    }
-
     const response = await fetch(url, { ...options, headers });
 
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: response.statusText }));
-        const errorMessage = errorData.message || errorData.error || 'Unknown error from proxy.';
-        throw new Error(`Proxy API Error (${response.status}): ${errorMessage}`);
+        const errorData = await response.json().catch(() => ({ message: `Error del servidor: ${response.statusText}` }));
+        // Extract a more user-friendly error from GitHub's response if available
+        const detailedMessage = errorData.message || errorData.error || 'Error desconocido del proxy.';
+        throw new Error(`Error en la API (${response.status}): ${detailedMessage}`);
     }
     
-    // Handle responses with no body content
-    if (response.status === 204 || (response.status === 200 && options.method?.toUpperCase() === 'DELETE') || response.status === 201) {
+    // Handle responses with no body content (e.g., 204 No Content, successful DELETE)
+    if (response.status === 204 || response.status === 201 || (response.status === 200 && options.method?.toUpperCase() === 'DELETE')) {
         return null;
     }
     
@@ -52,6 +45,7 @@ async function githubApiRequest(path: string, options: RequestInit = {}) {
 let galleryCache: (GalleryItem & { _sha: string, _path: string })[] | null = null;
 
 export const getGalleryItems = async (): Promise<GalleryItem[]> => {
+    // Return cached data if available to improve performance and reduce API calls
     if (galleryCache) {
         return galleryCache;
     }
@@ -69,37 +63,45 @@ export const getGalleryItems = async (): Promise<GalleryItem[]> => {
                     .filter(file => file.name.endsWith('.json'))
                     .map(async (file) => {
                         try {
+                            // The content of the file is included in the directory listing if the files are small enough
+                            if (file.content) {
+                                const decodedContent = atob(file.content);
+                                const item = JSON.parse(decodedContent);
+                                return { ...item, _sha: file.sha, _path: file.path };
+                            }
+                            // Fallback to fetch individual file if content is not in the directory listing
                             const fileData = await githubApiRequest(file.path);
                             if (fileData.encoding !== 'base64') return null;
                             const decodedContent = atob(fileData.content);
                             const item = JSON.parse(decodedContent);
                             return { ...item, _sha: fileData.sha, _path: fileData.path };
                         } catch (e) {
-                            console.error(`Failed to fetch or parse ${file.path}`, e);
+                            console.error(`Error al obtener o procesar ${file.path}`, e);
                             return null;
                         }
                     });
                 
                 return (await Promise.all(fileContentPromises)).filter(Boolean);
             } catch (e) {
-                 if (e instanceof Error && (e.message.includes('404') || e.message.includes('Not Found'))) {
-                    // Directory doesn't exist yet, which is fine.
+                 if (e instanceof Error && e.message.includes('404')) {
+                    // It's normal for a folder to not exist yet, especially on first run.
                     return [];
                 }
-                throw e; // Re-throw other errors
+                throw e; // Re-throw other, more critical errors
             }
         });
 
         const results = await Promise.all(dirPromises);
         results.forEach(folderItems => allItems.push(...folderItems as any));
 
+        // Sort all items by creation date, descending
         allItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         
         galleryCache = allItems;
         return allItems;
 
     } catch (error) {
-        console.error(`Failed to get gallery items from GitHub:`, error);
+        console.error(`Error al obtener los elementos de la galería:`, error);
         throw error;
     }
 };
@@ -112,14 +114,12 @@ export const addGalleryItem = async (itemData: Omit<AudioVizGalleryItem, 'id' | 
         votes: 0,
     } as any;
     
-    const folder = FOLDER_MAP[newItem.type as keyof typeof FOLDER_MAP];
-    if (!folder) {
-        throw new Error('Invalid gallery item type');
-    }
-    const filePath = `${folder}/${newItem.id}.json`;
-    const commitMessage = `feat: Add ${newItem.type} "${newItem.title}" by ${newItem.author}`;
+    const folder = FOLDER_MAP[newItem.type];
+    if (!folder) throw new Error('Tipo de elemento de galería inválido.');
 
-    // btoa is a browser function for base64 encoding
+    const filePath = `${folder}/${newItem.id}.json`;
+    const commitMessage = `feat: Añadir ${newItem.type} "${newItem.title}" por ${newItem.author}`;
+
     const encodedContent = btoa(unescape(encodeURIComponent(JSON.stringify(newItem, null, 2))));
 
     await githubApiRequest(filePath, {
@@ -130,19 +130,16 @@ export const addGalleryItem = async (itemData: Omit<AudioVizGalleryItem, 'id' | 
         }),
     });
     
-    galleryCache = null; // Invalidate cache
+    galleryCache = null; // Invalidate cache after modification
 };
 
 export const deleteGalleryItem = async (id: string): Promise<void> => {
-    if (!galleryCache) {
-        await getGalleryItems();
-    }
+    if (!galleryCache) await getGalleryItems();
+    
     const itemToDelete = galleryCache?.find(item => item.id === id);
-    if (!itemToDelete) {
-        throw new Error("Item not found for deletion. It might have been already deleted.");
-    }
+    if (!itemToDelete) throw new Error("El elemento a eliminar no fue encontrado. Puede que ya haya sido borrado.");
 
-    const commitMessage = `fix: Delete item ${itemToDelete.title} (${itemToDelete.id})`;
+    const commitMessage = `fix: Eliminar "${itemToDelete.title}" (${itemToDelete.id})`;
 
     await githubApiRequest(itemToDelete._path, {
         method: 'DELETE',
@@ -158,20 +155,15 @@ export const deleteGalleryItem = async (id: string): Promise<void> => {
 export const voteForItem = async (id: string): Promise<void> => {
     if (hasVotedForItem(id)) return;
 
-    if (!galleryCache) {
-       await getGalleryItems();
-    }
+    if (!galleryCache) await getGalleryItems();
 
     const itemToVote = galleryCache?.find(item => item.id === id);
-    if (!itemToVote) {
-        throw new Error("Item not found for voting.");
-    }
+    if (!itemToVote) throw new Error("El elemento a votar no fue encontrado.");
 
     const updatedItem = { ...itemToVote, votes: itemToVote.votes + 1 };
-    // remove internal properties before saving
-    const {_sha, _path, ...itemToSave} = updatedItem;
+    const {_sha, _path, ...itemToSave} = updatedItem; // Exclude internal cache properties
 
-    const commitMessage = `chore: Upvote for ${itemToVote.title} (${itemToVote.id})`;
+    const commitMessage = `chore: Voto para "${itemToVote.title}" (${itemToVote.id})`;
     const encodedContent = btoa(unescape(encodeURIComponent(JSON.stringify(itemToSave, null, 2))));
 
     await githubApiRequest(itemToVote._path, {
@@ -185,20 +177,19 @@ export const voteForItem = async (id: string): Promise<void> => {
 
     awardPoints(itemToVote.author, 10);
     try {
-        window.localStorage.setItem(`${VOTED_KEY_PREFIX}${id}`, 'true');
+        localStorage.setItem(`${VOTED_KEY_PREFIX}${id}`, 'true');
     } catch (error) {
-        console.warn(`Failed to set vote status in localStorage:`, error);
+        console.warn(`No se pudo guardar el estado del voto en localStorage:`, error);
     }
 
     galleryCache = null; // Invalidate cache
 };
 
-// This remains in localStorage as it's user-specific
 export const hasVotedForItem = (id: string): boolean => {
     try {
-        return window.localStorage.getItem(`${VOTED_KEY_PREFIX}${id}`) === 'true';
+        return localStorage.getItem(`${VOTED_KEY_PREFIX}${id}`) === 'true';
     } catch (error) {
-        console.warn(`Failed to check vote status in localStorage:`, error);
+        console.warn(`No se pudo comprobar el estado del voto en localStorage:`, error);
         return false;
     }
 };

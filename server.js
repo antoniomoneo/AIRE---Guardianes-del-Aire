@@ -11,64 +11,53 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Body parser
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "50mb" })); // Increased limit for larger media in gallery
 
 // Healthcheck simple
 app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));
 
-// GitHub API Proxy
+// --- GitHub API Proxy ---
+// This proxy centralizes all GitHub API interactions, keeping the token secure on the server.
 const GITHUB_API_URL = 'https://api.github.com/repos/antoniomoneo/Aire-gallery/contents';
 
 app.all('/api/github/*', async (req, res) => {
     if (!process.env.GITHUB_TOKEN) {
-        return res.status(500).json({ error: "GITHUB_TOKEN no configurado en el servidor." });
+        return res.status(500).json({ error: "El token de GitHub (GITHUB_TOKEN) no está configurado en el servidor." });
     }
 
     const githubPath = req.params[0];
     const targetUrl = `${GITHUB_API_URL}/${githubPath}`;
 
     try {
-        const options = {
+        const fetchOptions: RequestInit = {
             method: req.method,
             headers: {
                 'Accept': 'application/vnd.github.v3+json',
-                'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                'User-Agent': 'A.I.R.E-App-Proxy',
-                'X-GitHub-Api-Version': '2022-11-28',
-            } as HeadersInit
+                'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+                'User-Agent': 'A.I.R.E-App-Proxy/1.0',
+            }
         };
 
         if (req.method !== 'GET' && req.body && Object.keys(req.body).length > 0) {
-            options.body = JSON.stringify(req.body);
-            (options.headers as Record<string, string>)['Content-Type'] = 'application/json';
+            fetchOptions.body = JSON.stringify(req.body);
+            (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/json';
         }
         
-        const githubResponse = await fetch(targetUrl, options);
-
-        const status = githubResponse.status;
+        const githubResponse = await fetch(targetUrl, fetchOptions);
+        const responseBody = await githubResponse.text(); // Read body once
         
-        // Handle responses with no body
-        if (status === 204 || status === 201 || (status === 200 && req.method === 'DELETE')) {
-            return res.status(status).send();
-        }
-
-        const contentType = githubResponse.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-            const data = await githubResponse.json();
-            return res.status(status).json(data);
-        }
-        
-        const text = await githubResponse.text();
-        return res.status(status).send(text);
+        res.status(githubResponse.status);
+        res.type(githubResponse.headers.get('content-type') || 'text/plain');
+        res.send(responseBody);
 
     } catch (error) {
-        console.error('Error proxying to GitHub API:', error);
-        res.status(500).json({ error: 'Error interno del servidor al contactar con GitHub.' });
+        console.error('Error en el proxy de GitHub API:', error);
+        res.status(502).json({ error: 'Error del proxy: no se pudo contactar con la API de GitHub.' });
     }
 });
 
 
-// Initialize Gemini client if API key is available
+// --- Gemini API Proxy ---
 let ai;
 if (process.env.API_KEY) {
   ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -76,19 +65,13 @@ if (process.env.API_KEY) {
   console.warn("API_KEY environment variable not set. The /api/gemini/generate endpoint will not work.");
 }
 
-
-// Proxy a Gemini usando el SDK @google/genai
 app.post("/api/gemini/generate", async (req, res) => {
   if (!ai) {
-    return res.status(500).json({ error: "API_KEY no configurada en el servidor." });
+    return res.status(500).json({ error: "La clave de API de Gemini (API_KEY) no está configurada en el servidor." });
   }
   
   try {
-    // El cuerpo de la petición del frontend (req.body) debe coincidir
-    // con los parámetros de ai.models.generateContent(), que incluye 'model', 'contents', y 'config'.
     const response = await ai.models.generateContent(req.body);
-    
-    // La respuesta del SDK es un objeto JSON que el frontend puede parsear directamente.
     res.status(200).json(response);
   } catch (e) {
     console.error("Error calling Gemini API:", e);
@@ -98,14 +81,14 @@ app.post("/api/gemini/generate", async (req, res) => {
   }
 });
 
-// Estáticos del build de Vite
+// Serve static files from the Vite build output
 app.use(express.static(path.join(__dirname, "dist")));
 
-// SPA fallback
+// SPA fallback: redirect all other requests to index.html
 app.get("*", (_req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server on http://0.0.0.0:${PORT}`);
+  console.log(`Servidor iniciado en http://0.0.0.0:${PORT}`);
 });
