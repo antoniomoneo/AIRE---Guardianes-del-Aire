@@ -135,6 +135,8 @@ const filterByKeywords = (items: ParticipationItem[]): ParticipationItem[] => {
     });
 };
 
+const ITEMS_PER_PAGE = 10;
+
 export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
     const [activeTab, setActiveTab] = useState<'proposals' | 'debates'>('proposals');
     const [items, setItems] = useState<ParticipationItem[]>([]);
@@ -143,11 +145,13 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const hasAwardedPoints = useRef(false);
 
-    // State for Quick Filters
+    // State for Quick Filters & Pagination
     const [activeQuickFilter, setActiveQuickFilter] = useState<'all' | '2024' | '2025' | 'ai'>('all');
     const [isAiFiltering, setIsAiFiltering] = useState(false);
     const [aiFilterError, setAiFilterError] = useState<string | null>(null);
     const [aiFilteredIds, setAiFilteredIds] = useState<Set<string> | null>(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
 
     // State for AI Proposal Generator
     const [idea, setIdea] = useState('');
@@ -170,7 +174,7 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
             setIsLoading(true);
             setError(null);
             setItems([]);
-            // Reset AI filters when tab changes
+            setCurrentPage(1);
             setAiFilteredIds(null);
             setActiveQuickFilter('all');
             const url = activeTab === 'proposals' ? PROPOSALS_URL : DEBATES_URL;
@@ -190,8 +194,12 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
         };
         fetchData();
     }, [activeTab]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, activeQuickFilter]);
     
-    const filteredItems = useMemo(() => {
+    const fullyFilteredItems = useMemo(() => {
         let baseItems = items;
 
         if (activeQuickFilter === 'ai' && aiFilteredIds) {
@@ -209,6 +217,18 @@ export const Participa: React.FC<ParticipaProps> = ({ onClose, userName }) => {
             item.description.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [items, searchTerm, activeQuickFilter, aiFilteredIds]);
+
+    const totalPages = Math.ceil(fullyFilteredItems.length / ITEMS_PER_PAGE);
+    const paginatedItems = useMemo(() => {
+        return fullyFilteredItems.slice(
+            (currentPage - 1) * ITEMS_PER_PAGE,
+            currentPage * ITEMS_PER_PAGE
+        );
+    }, [fullyFilteredItems, currentPage]);
+
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, fullyFilteredItems.length);
+    const counterText = `Mostrando ${fullyFilteredItems.length > 0 ? startIndex + 1 : 0}-${endIndex} de ${fullyFilteredItems.length} iniciativas.`;
 
     const handleGenerateDraft = async () => {
         if (!idea.trim() || isGenerating) return;
@@ -291,7 +311,7 @@ La idea del ciudadano es: "${idea}"`;
                 body: JSON.stringify({
                     model: "gemini-2.5-flash",
                     contents: [{ role: "user", parts: [{ text: prompt }] }],
-                    config: { responseMimeType: "application/json", responseSchema }
+                    generationConfig: { responseMimeType: "application/json", responseSchema }
                 }),
             });
 
@@ -372,6 +392,31 @@ La idea del ciudadano es: "${idea}"`;
         </div>
     );
 
+    const PaginationControls = () => {
+        if (totalPages <= 1) return null;
+        return (
+            <div className="flex justify-center items-center gap-4 mt-4">
+                <button
+                    onClick={() => setCurrentPage(p => p - 1)}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-gray-700 rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                >
+                    Anterior
+                </button>
+                <span className="text-gray-300 font-semibold">
+                    Página {currentPage} de {totalPages}
+                </span>
+                <button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-gray-700 rounded-md hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white"
+                >
+                    Siguiente
+                </button>
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
             <div className="bg-gray-900/90 border border-pink-500/30 rounded-2xl shadow-2xl w-full max-w-7xl h-full sm:h-[90vh] p-4 sm:p-6 flex flex-col relative" onClick={e => e.stopPropagation()}>
@@ -391,7 +436,7 @@ La idea del ciudadano es: "${idea}"`;
                             <TabButton type="debates" label="Debates" />
                         </div>
                         <div className="py-3 flex-shrink-0 space-y-2">
-                             <p className="text-sm text-gray-400">Mostrando {filteredItems.length} de {items.length} iniciativas.</p>
+                             <p className="text-sm text-gray-400">{counterText}</p>
                              <div className="flex flex-wrap gap-2 items-center">
                                 <span className="text-gray-400 text-sm font-bold">Filtros rápidos:</span>
                                 <QuickFilterButton label="Todos" onClick={() => setActiveQuickFilter('all')} isActive={activeQuickFilter === 'all'} />
@@ -405,7 +450,12 @@ La idea del ciudadano es: "${idea}"`;
                         <div className="flex-grow overflow-y-auto pr-2">
                             {error ? <div className="flex items-center justify-center h-full text-center text-red-400">{error}</div>
                                 : isLoading ? <div className="flex items-center justify-center h-full text-gray-400">Buscando iniciativas...</div>
-                                : filteredItems.length > 0 ? <div className="space-y-4">{filteredItems.map(item => <Card key={item.id} item={item} />)}</div>
+                                : paginatedItems.length > 0 ? (
+                                    <>
+                                        <div className="space-y-4">{paginatedItems.map(item => <Card key={item.id} item={item} />)}</div>
+                                        <PaginationControls />
+                                    </>
+                                )
                                 : <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
                                     <h3 className="text-2xl font-orbitron">No hay resultados</h3>
                                     <p className="mt-2 max-w-md">{items.length === 0 ? `No se encontraron ${activeTab === 'proposals' ? 'propuestas' : 'debates'} sobre calidad del aire.` : `Ningún resultado coincide con los filtros aplicados.`}</p>
