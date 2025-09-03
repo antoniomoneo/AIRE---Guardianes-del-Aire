@@ -79,7 +79,7 @@ const App: React.FC = () => {
         } else {
             // New user, must start at cover screen
              const pathName = window.location.pathname;
-             if (pathName !== '/') {
+             if (pathName !== '/' && window.self === window.top) {
                 try {
                     window.history.replaceState({}, '', '/');
                 } catch (e) {
@@ -126,10 +126,12 @@ const App: React.FC = () => {
       } catch(e) {
           console.warn("Could not clear intro status from localStorage.");
       }
-      try {
-        window.history.pushState({}, '', '/');
-      } catch (e) {
-        console.warn("History API not available.", e);
+      if (window.self === window.top) {
+        try {
+          window.history.pushState({}, '', '/');
+        } catch (e) {
+          console.warn("History API not available.", e);
+        }
       }
       setAppState('splash');
   }, [closeAllModals]);
@@ -138,10 +140,12 @@ const App: React.FC = () => {
     const sanitizedName = name.trim();
     if (!sanitizedName) return;
     setUserName(sanitizedName);
-    try {
-      window.history.pushState({}, '', `/${encodeURIComponent(sanitizedName)}`);
-    } catch (e) {
-      console.warn("History API not available.", e);
+    if (window.self === window.top) {
+      try {
+        window.history.pushState({}, '', `/${encodeURIComponent(sanitizedName)}`);
+      } catch (e) {
+        console.warn("History API not available.", e);
+      }
     }
     setAppState('intro');
   };
