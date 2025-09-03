@@ -1,48 +1,447 @@
 // https://surikov.github.io/webaudiofont/
 // (c) 2013-2018 Sergei Surikov
 // (c) 2018-2023 WBF
-var WebAudioFontPlayer=function(){"use strict";return this.queueWaveTable=function(audioContext,target,preset,when,pitch,duration,volume,slides){var sampleRatio=preset.sampleRate/audioContext.sampleRate;var zone=this.findZone(preset,pitch);var basePitch=zone.ahdr?pitch:zone.keyRangeLow;var loop=this.findLoop(zone);var instrument=this.player.loader.instrumentInfo(preset.b);var modulator=this.createModulator(audioContext,target,when,duration,zone,slides);var vibrato=this.createVibrato(audioContext,target,when,duration,zone);var envelope=this.createEnvelope(audioContext,target,when,duration,zone,volume,loop);var source=this.createSource(audio_context,zone,loop);this.setupFilters(audioContext,source,zone);var seconds=audioContext.currentTime;var durationInFrames=duration*audioContext.sampleRate;var start=Math.floor(zone.sampleStart*sampleRatio);var end=Math.floor(zone.sampleEnd*sampleRatio);if(zone.isDrum){var drumDuration=duration;if(loop.start<loop.end){drumDuration=loop.end-loop.start;drumDuration=drumDuration/preset.sampleRate;}
-source.buffer=this.player.loader.decodeAfterLoading(audioContext,preset.b,pitch);source.loop=true;source.loopStart=loop.start/preset.sampleRate;source.loopEnd=loop.end/preset.sampleRate;var playbackRate=1;source.playbackRate.setValueAtTime(playbackRate,when);var startWhen=when;source.start(startWhen,source.loopStart,drumDuration);source.stop(startWhen+drumDuration);}else{source.buffer=this.player.loader.decodeAfterLoading(audio_context,preset.b);source.loop=loop.start<loop.end;source.loopStart=loop.start/preset.sampleRate;source.loopEnd=loop.end/preset.sampleRate;var playbackRate=this.player.loader.getPlaybackRate(pitch,zone);source.playbackRate.setValueAtTime(playbackRate,when);var startWhen=when;if(loop.start>0){var loopDuration=(loop.end-loop.start)/preset.sampleRate/playbackRate;var noteDuration=duration-envelope.attackTime-envelope.holdTime-envelope.decayTime;if(loopDuration<noteDuration){duration=envelope.attackTime+envelope.holdTime+envelope.decayTime+loopDuration;}}
-source.start(startWhen,zone.sampleStart/preset.sampleRate);source.stop(when+duration);}
-this.player.loader.startLoad(audioContext,source.buffer,preset,pitch);return source;},this.findZone=function(preset,pitch){var zone=null;for(var i=0;i<preset.zones.length;i++){zone=preset.zones[i];if(pitch>=zone.keyRangeLow&&pitch<=zone.keyRangeHigh){return zone;}}
-return zone;},this.findLoop=function(zone){var loop={start:0,end:0};if(zone.loopStart>0&&zone.loopEnd>0){loop.start=zone.loopStart;loop.end=zone.loopEnd;return loop;}
-if(zone.ahdr){if(zone.ahdr.length>0){for(var i=0;i<zone.ahdr.length;i++){var z=zone.ahdr[i];if(z.smplStart&&z.smplEnd){loop.start=z.smplStart;loop.end=z.smplEnd;return loop;}}}}
-return loop;},this.createModulator=function(audioContext,target,when,duration,zone,slides){return null;},this.createVibrato=function(audioContext,target,when,duration,zone){var vibrato=null;if(zone.vibrato){var vibratoGain=audioContext.createGain();vibratoGain.gain.value=zone.vibrato.level;vibratoGain.connect(target.gain);var vibratoOsc=audioContext.createOscillator();vibratoOsc.frequency.value=zone.vibrato.rate;vibratoOsc.connect(vibratoGain);vibratoOsc.start(when);vibratoOsc.stop(when+duration);vibrato={node:vibratoGain,osc:vibratoOsc};}
-return vibrato;},this.createEnvelope=function(audioContext,target,when,duration,zone,volume,loop){var envelope=null;if(zone.ahdr){var envelopeNode=audioContext.createGain();envelopeNode.connect(target);envelopeNode.gain.cancelScheduledValues(when);envelopeNode.gain.setValueAtTime(0,when);var lastTime=0;var lastValue=0;var attackTime=0;var holdTime=0;var decayTime=0;var ahdr=zone.ahdr;if(ahdr.length>0){for(var i=0;i<ahdr.length;i++){var z=ahdr[i];var time=z.time/1000;var value=z.value;if(z.type==='attack'){attackTime=time;envelopeNode.gain.linearRampToValueAtTime(value,when+time);lastValue=value;}else if(z.type==='hold'){holdTime=time;envelopeNode.gain.linearRampToValueAtTime(lastValue,when+lastTime+time);lastValue=lastValue;}else if(z.type==='decay'){decayTime=time;envelopeNode.gain.linearRampToValueAtTime(value,when+lastTime+time);lastValue=value;}else{envelopeNode.gain.linearRampToValueAtTime(value,when+lastTime+time);}
-lastTime=lastTime+time;}}
-var sustainValue=lastValue;var releaseTime=0.1;envelopeNode.gain.setValueAtTime(sustainValue,when+duration-releaseTime);envelopeNode.gain.linearRampToValueAtTime(0,when+duration);envelope={node:envelopeNode,attackTime:attackTime,holdTime:holdTime,decayTime:decayTime,sustainValue:sustainValue,releaseTime:releaseTime};}else{var envelopeNode=audioContext.createGain();envelopeNode.connect(target);envelopeNode.gain.setValueAtTime(volume,when);envelope={node:envelopeNode,attackTime:0,holdTime:0,decayTime:0,sustainValue:volume,releaseTime:0};}
-return envelope;},this.createSource=function(audio_context,zone,loop){var source=audio_context.createBufferSource();source.connect(envelope.node);return source;},this.setupFilters=function(audioContext,source,zone){if(zone.filters){for(var i=0;i<zone.filters.length;i++){var filterData=zone.filters[i];var filter=audioContext.createBiquadFilter();filter.type=filterData.type;if(filterData.frequency){filter.frequency.value=filterData.frequency;}
-if(filterData.Q){filter.Q.value=filterData.Q;}
-if(filterData.gain){filter.gain.value=filterData.gain;}
-source.connect(filter);source=filter;}}
-if(modulator){modulator.node.connect(source.detune);}
-if(vibrato){vibrato.node.connect(source.detune);}
-source.connect(envelope.node);},this.player=this,this.loader=new WebAudioFontLoader(this);};
-var WebAudioFontLoader=function(player){"use strict";this.loading=0;this.sounds=window["SOUND_CACHED_OBJECTS"]||{};this.player=player;return this;};
-WebAudioFontLoader.prototype.decodeAfterLoading=function(audio_context,path,pitch){"use strict";var sound=this.sounds[path];if(sound&&sound.buffer){if(pitch){if(sound.buffer[pitch]){return sound.buffer[pitch];}else{if(sound.decode){var audio=sound.decode;var buf=new Uint8Array(audio.length);buf.set(new Uint8Array(audio),0);sound.buffer[pitch]=audio_context.createBuffer(1,buf.length,sound.sampleRate);var f=sound.buffer[pitch].getChannelData(0);for(var i=0;i<buf.length;i++){f[i]=(buf[i]-128)/128.0;}
-return sound.buffer[pitch];}else{return null;}}}else{return sound.buffer;}}else{if(sound){if(sound.decode){var audio=sound.decode;var buf=new Uint8Array(audio.length);buf.set(new Uint8Array(audio),0);if(sound.dataType==='bytes'){sound.buffer=audio_context.createBuffer(1,buf.length,sound.sampleRate);var f=sound.buffer.getChannelData(0);for(var i=0;i<buf.length;i++){f[i]=(buf[i]-128)/128.0;}
-return sound.buffer;}else{var s=this;audio_context.decodeAudioData(buf.buffer,function(audioBuffer){sound.buffer=audioBuffer;return sound.buffer;},function(e){console.log("Error with decoding audio data for "+path,e);});}}else{this.sounds[path]=null;return null;}}};
-WebAudioFontLoader.prototype.startLoad=function(audio_context,buffer,preset,pitch){"use strict";if(buffer.ready){return;}else{buffer.ready=true;}
-var zone=this.player.findZone(preset,pitch);var url=preset.b;var sound=this.sounds[url];if(!sound){if(this.loading==0){var xmlHttpRequest=new XMLHttpRequest();xmlHttpRequest.open("GET",url,true);xmlHttpRequest.responseType="text";var loader=this;xmlHttpRequest.onload=function(){var json=window[preset.var];loader.sounds[url]=json;loader.decodeAfterLoading(audio_context,url);};this.loading=1;xmlHttpRequest.send();}}};
-WebAudioFontLoader.prototype.getPlaybackRate=function(pitch,zone){"use strict";var noteDifference=pitch-zone.originalPitch;var cents=noteDifference*100;var sample=zone.sample;var fineTune=zone.fineTune;var correction=zone.coarseTune;var totalCents=cents+fineTune;return Math.pow(2,totalCents/1200);};
-WebAudioFontLoader.prototype.instrumentInfo=function(path){"use strict";return this.sounds[path];};
-var WebAudioFontChannel=function(audio_context){"use strict";this.audio_context=audio_context;this.patches={};this.volume=1;this.pitchBend=0;this.reverb=0;this.chorus=0;this.expression=1;this.pan=0;this.sustain=0;this.release=0;this.nodes=[];this.gains=[];this.destinations=[];this.volumeNodes=[];this.expressionNodes=[];this.panNodes=[];this.pitchBendNodes=[];this.reverbNodes=[];this.chorusNodes=[];this.sustainNodes=[];this.releaseNodes=[];};
-WebAudioFontChannel.prototype.setVolume=function(volume){"use strict";this.volume=volume;for(var i=0;i<this.volumeNodes.length;i++){this.volumeNodes[i].gain.value=this.volume;}};
-WebAudioFontChannel.prototype.setPitchBend=function(pitchBend){"use strict";this.pitchBend=pitchBend;for(var i=0;i<this.pitchBendNodes.length;i++){this.pitchBendNodes[i].gain.value=this.pitchBend;}};
-WebAudioFontChannel.prototype.setReverb=function(reverb){"use strict";this.reverb=reverb;for(var i=0;i<this.reverbNodes.length;i++){this.reverbNodes[i].gain.value=this.reverb;}};
-WebAudioFontChannel.prototype.setChorus=function(chorus){"use strict";this.chorus=chorus;for(var i=0;i<this.chorusNodes.length;i++){this.chorusNodes[i].gain.value=this.chorus;}};
-WebAudioFontChannel.prototype.setExpression=function(expression){"use strict";this.expression=expression;for(var i=0;i<this.expressionNodes.length;i++){this.expressionNodes[i].gain.value=this.expression;}};
-WebAudioFontChannel.prototype.setPan=function(pan){"use strict";this.pan=pan;for(var i=0;i<this.panNodes.length;i++){this.panNodes[i].pan.value=this.pan;}};
-WebAudioFontChannel.prototype.setSustain=function(sustain){"use strict";this.sustain=sustain;for(var i=0;i<this.sustainNodes.length;i++){this.sustainNodes[i].gain.value=this.sustain;}};
-WebAudioFontChannel.prototype.setRelease=function(release){"use strict";this.release=release;for(var i=0;i<this.releaseNodes.length;i++){this.releaseNodes[i].gain.value=this.release;}};
-WebAudioFontChannel.prototype.setPatch=function(patch){"use strict";this.patch=patch;};
-WebAudioFontChannel.prototype.cancel=function(){"use strict";for(var i=0;i<this.nodes.length;i++){var node=this.nodes[i];if(node){node.stop(0);}}
-this.nodes=[];};
-WebAudioFontChannel.prototype.queue=function(player,preset,when,pitch,duration,volume,slides){"use strict";var gain=this.audio_context.createGain();var volumeNode=this.audio_context.createGain();volumeNode.gain.value=this.volume;this.volumeNodes.push(volumeNode);var expressionNode=this.audio_context.createGain();expressionNode.gain.value=this.expression;this.expressionNodes.push(expressionNode);var panNode=this.audio_context.createStereoPanner();panNode.pan.value=this.pan;this.panNodes.push(panNode);var pitchBendNode=this.audio_context.createGain();pitchBendNode.gain.value=this.pitchBend;this.pitchBendNodes.push(pitchBendNode);var reverbNode=this.audio_context.createGain();reverbNode.gain.value=this.reverb;this.reverbNodes.push(reverbNode);var chorusNode=this.audio_context.createGain();chorusNode.gain.value=this.chorus;this.chorusNodes.push(chorusNode);var sustainNode=this.audio_context.createGain();sustainNode.gain.value=this.sustain;this.sustainNodes.push(sustainNode);var releaseNode=this.audio_context.createGain();releaseNode.gain.value=this.release;this.releaseNodes.push(releaseNode);gain.connect(volumeNode);volumeNode.connect(expressionNode);expressionNode.connect(panNode);panNode.connect(this.audio_context.destination);var node=player.queueWaveTable(this.audio_context,gain,preset,when,pitch,duration,volume,slides);this.nodes.push(node);return node;};
-if(typeof module==="object"&&module.exports){module.exports=WebAudioFontPlayer;}
-if(typeof define==="function"&&define.amd){define("WebAudioFontPlayer",function(){return WebAudioFontPlayer;});}
-if(typeof window!=="undefined"){window.WebAudioFontPlayer=WebAudioFontPlayer;window.WebAudioFontLoader=WebAudioFontLoader;window.WebAudioFontChannel=WebAudioFontChannel;}
-this.WebAudioFontPlayer=WebAudioFontPlayer;
-this.WebAudioFontLoader=WebAudioFontLoader;
-this.WebAudioFontChannel=WebAudioFontChannel;
+var WebAudioFontPlayer = function() {
+    "use strict";
+    return this.queueWaveTable = function(audioContext, target, preset, when, pitch, duration, volume, slides) {
+        var sampleRatio = preset.sampleRate / audioContext.sampleRate;
+        var zone = this.findZone(preset, pitch);
+        var basePitch = zone.ahdr ? pitch : zone.keyRangeLow;
+        var loop = this.findLoop(zone);
+        var instrument = this.player.loader.instrumentInfo(preset.b);
+        var modulator = this.createModulator(audioContext, target, when, duration, zone, slides);
+        var vibrato = this.createVibrato(audioContext, target, when, duration, zone);
+        var envelope = this.createEnvelope(audioContext, target, when, duration, zone, volume, loop);
+        var source = this.createSource(audio_context, zone, loop, envelope);
+        this.setupFilters(audioContext, source, zone, envelope, modulator, vibrato);
+        var seconds = audioContext.currentTime;
+        var durationInFrames = duration * audioContext.sampleRate;
+        var start = Math.floor(zone.sampleStart * sampleRatio);
+        var end = Math.floor(zone.sampleEnd * sampleRatio);
+        if (zone.isDrum) {
+            var drumDuration = duration;
+            if (loop.start < loop.end) {
+                drumDuration = loop.end - loop.start;
+                drumDuration = drumDuration / preset.sampleRate;
+            }
+            source.buffer = this.player.loader.decodeAfterLoading(audioContext, preset.b, pitch);
+            source.loop = true;
+            source.loopStart = loop.start / preset.sampleRate;
+            source.loopEnd = loop.end / preset.sampleRate;
+            var playbackRate = 1;
+            source.playbackRate.setValueAtTime(playbackRate, when);
+            var startWhen = when;
+            source.start(startWhen, source.loopStart, drumDuration);
+            source.stop(startWhen + drumDuration);
+        } else {
+            source.buffer = this.player.loader.decodeAfterLoading(audio_context, preset.b);
+            source.loop = loop.start < loop.end;
+            source.loopStart = loop.start / preset.sampleRate;
+            source.loopEnd = loop.end / preset.sampleRate;
+            var playbackRate = this.player.loader.getPlaybackRate(pitch, zone);
+            source.playbackRate.setValueAtTime(playbackRate, when);
+            var startWhen = when;
+            if (loop.start > 0) {
+                var loopDuration = (loop.end - loop.start) / preset.sampleRate / playbackRate;
+                var noteDuration = duration - envelope.attackTime - envelope.holdTime - envelope.decayTime;
+                if (loopDuration < noteDuration) {
+                    duration = envelope.attackTime + envelope.holdTime + envelope.decayTime + loopDuration;
+                }
+            }
+            source.start(startWhen, zone.sampleStart / preset.sampleRate);
+            source.stop(when + duration);
+        }
+        this.player.loader.startLoad(audioContext, source.buffer, preset, pitch);
+        return source;
+    }, this.findZone = function(preset, pitch) {
+        var zone = null;
+        for (var i = 0; i < preset.zones.length; i++) {
+            zone = preset.zones[i];
+            if (pitch >= zone.keyRangeLow && pitch <= zone.keyRangeHigh) {
+                return zone;
+            }
+        }
+        return zone;
+    }, this.findLoop = function(zone) {
+        var loop = {
+            start: 0,
+            end: 0
+        };
+        if (zone.loopStart > 0 && zone.loopEnd > 0) {
+            loop.start = zone.loopStart;
+            loop.end = zone.loopEnd;
+            return loop;
+        }
+        if (zone.ahdr) {
+            if (zone.ahdr.length > 0) {
+                for (var i = 0; i < zone.ahdr.length; i++) {
+                    var z = zone.ahdr[i];
+                    if (z.smplStart && z.smplEnd) {
+                        loop.start = z.smplStart;
+                        loop.end = z.smplEnd;
+                        return loop;
+                    }
+                }
+            }
+        }
+        return loop;
+    }, this.createModulator = function(audioContext, target, when, duration, zone, slides) {
+        return null;
+    }, this.createVibrato = function(audioContext, target, when, duration, zone) {
+        var vibrato = null;
+        if (zone.vibrato) {
+            var vibratoGain = audioContext.createGain();
+            vibratoGain.gain.value = zone.vibrato.level;
+            vibratoGain.connect(target.gain);
+            var vibratoOsc = audioContext.createOscillator();
+            vibratoOsc.frequency.value = zone.vibrato.rate;
+            vibratoOsc.connect(vibratoGain);
+            vibratoOsc.start(when);
+            vibratoOsc.stop(when + duration);
+            vibrato = {
+                node: vibratoGain,
+                osc: vibratoOsc
+            };
+        }
+        return vibrato;
+    }, this.createEnvelope = function(audioContext, target, when, duration, zone, volume, loop) {
+        var envelope = null;
+        if (zone.ahdr) {
+            var envelopeNode = audioContext.createGain();
+            envelopeNode.connect(target);
+            envelopeNode.gain.cancelScheduledValues(when);
+            envelopeNode.gain.setValueAtTime(0, when);
+            var lastTime = 0;
+            var lastValue = 0;
+            var attackTime = 0;
+            var holdTime = 0;
+            var decayTime = 0;
+            var ahdr = zone.ahdr;
+            if (ahdr.length > 0) {
+                for (var i = 0; i < ahdr.length; i++) {
+                    var z = ahdr[i];
+                    var time = z.time / 1000;
+                    var value = z.value;
+                    if (z.type === 'attack') {
+                        attackTime = time;
+                        envelopeNode.gain.linearRampToValueAtTime(value, when + time);
+                        lastValue = value;
+                    } else if (z.type === 'hold') {
+                        holdTime = time;
+                        envelopeNode.gain.linearRampToValueAtTime(lastValue, when + lastTime + time);
+                        lastValue = lastValue;
+                    } else if (z.type === 'decay') {
+                        decayTime = time;
+                        envelopeNode.gain.linearRampToValueAtTime(value, when + lastTime + time);
+                        lastValue = value;
+                    } else {
+                        envelopeNode.gain.linearRampToValueAtTime(value, when + lastTime + time);
+                    }
+                    lastTime = lastTime + time;
+                }
+            }
+            var sustainValue = lastValue;
+            var releaseTime = 0.1;
+            envelopeNode.gain.setValueAtTime(sustainValue, when + duration - releaseTime);
+            envelopeNode.gain.linearRampToValueAtTime(0, when + duration);
+            envelope = {
+                node: envelopeNode,
+                attackTime: attackTime,
+                holdTime: holdTime,
+                decayTime: decayTime,
+                sustainValue: sustainValue,
+                releaseTime: releaseTime
+            };
+        } else {
+            var envelopeNode = audioContext.createGain();
+            envelopeNode.connect(target);
+            envelopeNode.gain.setValueAtTime(volume, when);
+            envelope = {
+                node: envelopeNode,
+                attackTime: 0,
+                holdTime: 0,
+                decayTime: 0,
+                sustainValue: volume,
+                releaseTime: 0
+            };
+        }
+        return envelope;
+    }, this.createSource = function(audio_context, zone, loop, envelope) {
+        var source = audio_context.createBufferSource();
+        return source;
+    }, this.setupFilters = function(audioContext, source, zone, envelope, modulator, vibrato) {
+        var lastNode = source;
+        if (zone.filters) {
+            for (var i = 0; i < zone.filters.length; i++) {
+                var filterData = zone.filters[i];
+                var filter = audioContext.createBiquadFilter();
+                filter.type = filterData.type;
+                if (filterData.frequency) {
+                    filter.frequency.value = filterData.frequency;
+                }
+                if (filterData.Q) {
+                    filter.Q.value = filterData.Q;
+                }
+                if (filterData.gain) {
+                    filter.gain.value = filterData.gain;
+                }
+                lastNode.connect(filter);
+                lastNode = filter;
+            }
+        }
+        if (modulator) {
+            modulator.node.connect(source.detune);
+        }
+        if (vibrato) {
+            vibrato.node.connect(source.detune);
+        }
+        lastNode.connect(envelope.node);
+    }, this.player = this, this.loader = new WebAudioFontLoader(this);
+};
+var WebAudioFontLoader = function(player) {
+    "use strict";
+    this.loading = 0;
+    this.sounds = window["SOUND_CACHED_OBJECTS"] || {};
+    this.player = player;
+    return this;
+};
+WebAudioFontLoader.prototype.decodeAfterLoading = function(audio_context, path, pitch) {
+    "use strict";
+    var sound = this.sounds[path];
+    if (sound && sound.buffer) {
+        if (pitch) {
+            if (sound.buffer[pitch]) {
+                return sound.buffer[pitch];
+            } else {
+                if (sound.decode) {
+                    var audio = sound.decode;
+                    var buf = new Uint8Array(audio.length);
+                    buf.set(new Uint8Array(audio), 0);
+                    sound.buffer[pitch] = audio_context.createBuffer(1, buf.length, sound.sampleRate);
+                    var f = sound.buffer[pitch].getChannelData(0);
+                    for (var i = 0; i < buf.length; i++) {
+                        f[i] = (buf[i] - 128) / 128.0;
+                    }
+                    return sound.buffer[pitch];
+                } else {
+                    return null;
+                }
+            }
+        } else {
+            return sound.buffer;
+        }
+    } else {
+        if (sound) {
+            if (sound.decode) {
+                var audio = sound.decode;
+                var buf = new Uint8Array(audio.length);
+                buf.set(new Uint8Array(audio), 0);
+                if (sound.dataType === 'bytes') {
+                    sound.buffer = audio_context.createBuffer(1, buf.length, sound.sampleRate);
+                    var f = sound.buffer.getChannelData(0);
+                    for (var i = 0; i < buf.length; i++) {
+                        f[i] = (buf[i] - 128) / 128.0;
+                    }
+                    return sound.buffer;
+                } else {
+                    var s = this;
+                    audio_context.decodeAudioData(buf.buffer, function(audioBuffer) {
+                        sound.buffer = audioBuffer;
+                        return sound.buffer;
+                    }, function(e) {
+                        console.log("Error with decoding audio data for " + path, e);
+                    });
+                }
+            }
+        } else {
+            this.sounds[path] = null;
+            return null;
+        }
+    }
+};
+WebAudioFontLoader.prototype.startLoad = function(audio_context, buffer, preset, pitch) {
+    "use strict";
+    if (buffer.ready) {
+        return;
+    } else {
+        buffer.ready = true;
+    }
+    var zone = this.player.findZone(preset, pitch);
+    var url = preset.b;
+    var sound = this.sounds[url];
+    if (!sound) {
+        if (this.loading == 0) {
+            var xmlHttpRequest = new XMLHttpRequest();
+            xmlHttpRequest.open("GET", url, true);
+            xmlHttpRequest.responseType = "text";
+            var loader = this;
+            xmlHttpRequest.onload = function() {
+                var json = window[preset.var];
+                loader.sounds[url] = json;
+                loader.decodeAfterLoading(audio_context, url);
+            };
+            this.loading = 1;
+            xmlHttpRequest.send();
+        }
+    }
+};
+WebAudioFontLoader.prototype.getPlaybackRate = function(pitch, zone) {
+    "use strict";
+    var noteDifference = pitch - zone.originalPitch;
+    var cents = noteDifference * 100;
+    var sample = zone.sample;
+    var fineTune = zone.fineTune;
+    var correction = zone.coarseTune;
+    var totalCents = cents + fineTune;
+    return Math.pow(2, totalCents / 1200);
+};
+WebAudioFontLoader.prototype.instrumentInfo = function(path) {
+    "use strict";
+    return this.sounds[path];
+};
+var WebAudioFontChannel = function(audio_context) {
+    "use strict";
+    this.audio_context = audio_context;
+    this.patches = {};
+    this.volume = 1;
+    this.pitchBend = 0;
+    this.reverb = 0;
+    this.chorus = 0;
+    this.expression = 1;
+    this.pan = 0;
+    this.sustain = 0;
+    this.release = 0;
+    this.nodes = [];
+    this.gains = [];
+    this.destinations = [];
+    this.volumeNodes = [];
+    this.expressionNodes = [];
+    this.panNodes = [];
+    this.pitchBendNodes = [];
+    this.reverbNodes = [];
+    this.chorusNodes = [];
+    this.sustainNodes = [];
+    this.releaseNodes = [];
+};
+WebAudioFontChannel.prototype.setVolume = function(volume) {
+    "use strict";
+    this.volume = volume;
+    for (var i = 0; i < this.volumeNodes.length; i++) {
+        this.volumeNodes[i].gain.value = this.volume;
+    }
+};
+WebAudioFontChannel.prototype.setPitchBend = function(pitchBend) {
+    "use strict";
+    this.pitchBend = pitchBend;
+    for (var i = 0; i < this.pitchBendNodes.length; i++) {
+        this.pitchBendNodes[i].gain.value = this.pitchBend;
+    }
+};
+WebAudioFontChannel.prototype.setReverb = function(reverb) {
+    "use strict";
+    this.reverb = reverb;
+    for (var i = 0; i < this.reverbNodes.length; i++) {
+        this.reverbNodes[i].gain.value = this.reverb;
+    }
+};
+WebAudioFontChannel.prototype.setChorus = function(chorus) {
+    "use strict";
+    this.chorus = chorus;
+    for (var i = 0; i < this.chorusNodes.length; i++) {
+        this.chorusNodes[i].gain.value = this.chorus;
+    }
+};
+WebAudioFontChannel.prototype.setExpression = function(expression) {
+    "use strict";
+    this.expression = expression;
+    for (var i = 0; i < this.expressionNodes.length; i++) {
+        this.expressionNodes[i].gain.value = this.expression;
+    }
+};
+WebAudioFontChannel.prototype.setPan = function(pan) {
+    "use strict";
+    this.pan = pan;
+    for (var i = 0; i < this.panNodes.length; i++) {
+        this.panNodes[i].pan.value = this.pan;
+    }
+};
+WebAudioFontChannel.prototype.setSustain = function(sustain) {
+    "use strict";
+    this.sustain = sustain;
+    for (var i = 0; i < this.sustainNodes.length; i++) {
+        this.sustainNodes[i].gain.value = this.sustain;
+    }
+};
+WebAudioFontChannel.prototype.setRelease = function(release) {
+    "use strict";
+    this.release = release;
+    for (var i = 0; i < this.releaseNodes.length; i++) {
+        this.releaseNodes[i].gain.value = this.release;
+    }
+};
+WebAudioFontChannel.prototype.setPatch = function(patch) {
+    "use strict";
+    this.patch = patch;
+};
+WebAudioFontChannel.prototype.cancel = function() {
+    "use strict";
+    for (var i = 0; i < this.nodes.length; i++) {
+        var node = this.nodes[i];
+        if (node) {
+            node.stop(0);
+        }
+    }
+    this.nodes = [];
+};
+WebAudioFontChannel.prototype.queue = function(player, preset, when, pitch, duration, volume, slides) {
+    "use strict";
+    var gain = this.audio_context.createGain();
+    var volumeNode = this.audio_context.createGain();
+    volumeNode.gain.value = this.volume;
+    this.volumeNodes.push(volumeNode);
+    var expressionNode = this.audio_context.createGain();
+    expressionNode.gain.value = this.expression;
+    this.expressionNodes.push(expressionNode);
+    var panNode = this.audio_context.createStereoPanner();
+    panNode.pan.value = this.pan;
+    this.panNodes.push(panNode);
+    var pitchBendNode = this.audio_context.createGain();
+    pitchBendNode.gain.value = this.pitchBend;
+    this.pitchBendNodes.push(pitchBendNode);
+    var reverbNode = this.audio_context.createGain();
+    reverbNode.gain.value = this.reverb;
+    this.reverbNodes.push(reverbNode);
+    var chorusNode = this.audio_context.createGain();
+    chorusNode.gain.value = this.chorus;
+    this.chorusNodes.push(chorusNode);
+    var sustainNode = this.audio_context.createGain();
+    sustainNode.gain.value = this.sustain;
+    this.sustainNodes.push(sustainNode);
+    var releaseNode = this.audio_context.createGain();
+    releaseNode.gain.value = this.release;
+    this.releaseNodes.push(releaseNode);
+    gain.connect(volumeNode);
+    volumeNode.connect(expressionNode);
+    expressionNode.connect(panNode);
+    panNode.connect(this.audio_context.destination);
+    var node = player.queueWaveTable(this.audio_context, gain, preset, when, pitch, duration, volume, slides);
+    this.nodes.push(node);
+    return node;
+};
+if (typeof module === "object" && module.exports) {
+    module.exports = WebAudioFontPlayer;
+}
+if (typeof define === "function" && define.amd) {
+    define("WebAudioFontPlayer", function() {
+        return WebAudioFontPlayer;
+    });
+}
+if (typeof window !== "undefined") {
+    window.WebAudioFontPlayer = WebAudioFontPlayer;
+    window.WebAudioFontLoader = WebAudioFontLoader;
+    window.WebAudioFontChannel = WebAudioFontChannel;
+}
+this.WebAudioFontPlayer = WebAudioFontPlayer;
+this.WebAudioFontLoader = WebAudioFontLoader;
+this.WebAudioFontChannel = WebAudioFontChannel;
 }();
