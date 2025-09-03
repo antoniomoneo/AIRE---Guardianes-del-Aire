@@ -60,7 +60,13 @@ export const renderSonification = (
     options: SonificationOptions & { masterLength: number }
 ): () => void => {
     
+    // Create all synthesizers and samplers upfront for this sonification instance.
     const synthsByTrackId: Record<string, Tone.PolySynth | Tone.Sampler> = {};
+    options.tracks.forEach(track => {
+        if (!track.isMuted && track.instrument !== 'rhythmicKit') {
+            synthsByTrackId[track.id] = getToneSynth(track.instrument);
+        }
+    });
     const drumKit = new Tone.Sampler({ urls: { C1: "kick.mp3", C2: "snare.mp3", C3: "hihat.mp3" }, baseUrl: "https://tonejs.github.io/audio/drum-samples/CR78/" }).toDestination();
 
     const parts: Tone.Part[] = [];
@@ -123,24 +129,51 @@ export const renderSonification = (
         }
         
         if (noteEvents.length > 0) {
+            // In the Part callback, we only reference pre-created instruments.
             const part = new Tone.Part((time, value) => {
                 if (track.instrument === 'rhythmicKit') {
-                    drumKit.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
-                } else {
-                    if (!synthsByTrackId[track.id]) {
-                        synthsByTrackId[track.id] = getToneSynth(track.instrument);
+                    if (drumKit && !drumKit.disposed) {
+                        drumKit.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
                     }
+                } else {
                     const synth = synthsByTrackId[track.id];
-                    synth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
+                    if (synth && !synth.disposed) {
+                       synth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
+                    }
                 }
             }, noteEvents).start(0);
             parts.push(part);
         }
     });
 
+    // The cleanup function now correctly disposes of all pre-created instruments.
     return () => {
-        parts.forEach(part => { try { part.dispose() } catch {} });
-        Object.values(synthsByTrackId).forEach(synth => { try { synth?.dispose() } catch {} });
-        try { drumKit.dispose() } catch {};
+        parts.forEach(part => {
+            try {
+                part.stop(0);
+                part.clear();
+                part.dispose();
+            } catch (e) {
+                // Ignore errors if already disposed.
+            }
+        });
+
+        Object.values(synthsByTrackId).forEach(synth => {
+            try {
+                if (synth && !synth.disposed) {
+                    synth.dispose();
+                }
+            } catch (e) {
+                // Ignore errors.
+            }
+        });
+
+        try {
+            if (drumKit && !drumKit.disposed) {
+                drumKit.dispose();
+            }
+        } catch (e) {
+            // Ignore errors.
+        }
     };
 };

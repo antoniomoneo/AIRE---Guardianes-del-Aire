@@ -28,19 +28,30 @@ export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
         throw new Error('WebCodecs API not supported in this browser.');
     }
 
+    // FIX: Define a fixed size for the exported video canvas to resolve undefined variable errors.
+    const canvasSize = 800;
+
     const frameRate = 1 / sonificationOptions.stepDuration;
     const duration = masterLength * sonificationOptions.stepDuration;
-    const canvasSize = 500;
 
     onProgress(1);
     
     // 1. Render Audio using Tone.Offline
+    // Clean up any lingering transport schedules before starting offline render.
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+
     const audioBuffer = await Tone.Offline(() => {
         // Schedule all the notes using the same logic as real-time playback
-        const cleanup = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength });
-        // The cleanup function is not needed here as Tone.Offline manages resources.
+        renderSonification(dataByPollutant, { ...sonificationOptions, masterLength });
+        // Start the transport so Tone.Offline can render the scheduled events.
+        Tone.Transport.start();
     }, duration);
 
+    // Clean up transport again after offline rendering is complete.
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    
     onProgress(10);
     
     const tempContainer = document.createElement('div');

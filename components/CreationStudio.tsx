@@ -85,21 +85,35 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
   const animationFrameRef = useRef<number | null>(null);
 
   const sonificationOptions: SonificationOptions = useMemo(() => ({ tracks, key, stepDuration }), [tracks, key, stepDuration]);
-
-  const stopPlayback = useCallback(() => {
-    if (playbackCleanupRef.current) {
-        try { playbackCleanupRef.current(); } catch {}
-        playbackCleanupRef.current = null;
-    }
+  
+  const stopAudioEngine = useCallback(() => {
+    // 1. Immediately stop the transport and the animation loop to prevent new events from firing.
     try {
         Tone.Transport.stop();
         Tone.Transport.cancel();
     } catch {}
+    
     if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
     }
-    setIsPlaying(false);
+    
+    // 2. Defer the actual disposal of audio nodes.
+    const cleanup = playbackCleanupRef.current;
+    if (cleanup) {
+        // By wrapping the cleanup in a setTimeout, we push the disposal
+        // to the next cycle of the event loop. This gives Tone.js's internal
+        // requestAnimationFrame loop a chance to complete its current tick without
+        // audio nodes disappearing from under it, resolving the race condition.
+        setTimeout(() => {
+            try {
+                cleanup();
+            } catch (e) {
+                console.error("Error during deferred audio cleanup:", e);
+            }
+        }, 4); // A small delay is enough.
+        playbackCleanupRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -109,9 +123,10 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     
     return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        stopPlayback();
+        stopAudioEngine();
     };
-  }, [stopPlayback]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const dataByPollutant = useMemo(() => {
     const filteredByYear = data.filter(d => d.ANO >= startYear && d.ANO <= endYear);
@@ -176,12 +191,12 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
         const initialDrawTimeout = setTimeout(() => { p5InstanceRef.current?.redraw(); }, 50);
 
         return () => {
-            stopPlayback();
+            stopAudioEngine();
             resizeObserver.disconnect();
             clearTimeout(initialDrawTimeout);
             currentP5Instance?.remove();
         };
-    }, [selectedVizId, visualData, stopPlayback]);
+    }, [selectedVizId, visualData, stopAudioEngine]);
 
 
     const addTrack = () => {
@@ -191,83 +206,61 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     const removeTrack = (id: string) => setTracks(prev => prev.filter(t => t.id !== id));
     const updateTrack = (id: string, newOptions: Partial<TrackOptions>) => setTracks(prev => prev.map(t => t.id === id ? { ...t, ...newOptions } : t));
     
-    const handlePlay = useCallback(async () => {
+    const handlePlay = useCallback(() => {
+        setIsPlaying(p => !p);
+    }, []);
+
+    // Main effect to control audio playback, driven by the `isPlaying` state.
+    useEffect(() => {
         if (isPlaying) {
-            stopPlayback();
-            return;
+            const startAudio = async () => {
+                if (visualData.length === 0) {
+                    alert("No hay datos para el rango de años seleccionado.");
+                    setIsPlaying(false); // Can't play, so set state back
+                    return;
+                }
+                
+                await Tone.start();
+                
+                // Although the cleanup function of the effect already runs,
+                // an extra call here ensures maximum safety before creating new audio nodes.
+                stopAudioEngine(); 
+                
+                playbackCleanupRef.current = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
+                Tone.Transport.start();
+
+                const startedAt = performance.now();
+                const total = visualData.length;
+                const currentStepDuration = sonificationOptions.stepDuration;
+
+                const tick = () => {
+                    const elapsedTimeSec = (performance.now() - startedAt) / 1000;
+                    const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / currentStepDuration));
+
+                    if (currentFrameIndexRef.current !== newFrameIndex) {
+                        currentFrameIndexRef.current = newFrameIndex;
+                        p5InstanceRef.current?.redraw();
+                    }
+                    
+                    // Check transport state to prevent animation continuing after explicit stop.
+                    if (Tone.Transport.state === 'started' && elapsedTimeSec < total * currentStepDuration) {
+                        animationFrameRef.current = requestAnimationFrame(tick);
+                    } else {
+                        setIsPlaying(false); // This will trigger the effect's cleanup.
+                    }
+                };
+                animationFrameRef.current = requestAnimationFrame(tick);
+            };
+
+            startAudio();
         }
 
-        if (visualData.length === 0) {
-            alert("No hay datos para el rango de años seleccionado.");
-            return;
-        }
-        
-        await Tone.start();
-        stopPlayback(); // Ensure clean state before starting
-
-        playbackCleanupRef.current = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
-        Tone.Transport.start();
-        setIsPlaying(true);
-
-        const startedAt = performance.now();
-        const total = visualData.length;
-
-        const tick = () => {
-            const elapsedTimeSec = (performance.now() - startedAt) / 1000;
-            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / stepDuration));
-            
-            if (currentFrameIndexRef.current !== newFrameIndex) {
-                 currentFrameIndexRef.current = newFrameIndex;
-                 p5InstanceRef.current?.redraw();
-            }
-
-            if (elapsedTimeSec < total * stepDuration) {
-                animationFrameRef.current = requestAnimationFrame(tick);
-            } else {
-                 stopPlayback();
-            }
+        // The cleanup function is crucial. It runs when `isPlaying` becomes false,
+        // or when any dependency changes, or when the component unmounts.
+        return () => {
+            stopAudioEngine();
         };
-        animationFrameRef.current = requestAnimationFrame(tick);
-
-    }, [isPlaying, dataByPollutant, sonificationOptions, visualData, stopPlayback, stepDuration]);
-
-  // This effect handles restarting playback if options change while playing.
-  useEffect(() => {
-    if (!isPlaying) return;
-    
-    const restartPlayback = async () => {
-        await Tone.start();
-        stopPlayback(); // stop current playback
-    
-        // Immediately restart with new settings
-        const cleanup = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
-        playbackCleanupRef.current = cleanup;
-        Tone.Transport.start();
-        setIsPlaying(true); // Set it back to true
-
-        const startedAt = performance.now();
-        const total = visualData.length;
-        const tick = () => {
-            const elapsedTimeSec = (performance.now() - startedAt) / 1000;
-            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / stepDuration));
-            if (currentFrameIndexRef.current !== newFrameIndex) {
-                currentFrameIndexRef.current = newFrameIndex;
-                p5InstanceRef.current?.redraw();
-            }
-            if (elapsedTimeSec < total * stepDuration) {
-                animationFrameRef.current = requestAnimationFrame(tick);
-            } else {
-                stopPlayback();
-            }
-        };
-        animationFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    restartPlayback();
-    // This effect should ONLY re-run when these dependencies change.
-    // `isPlaying` is intentionally omitted to avoid loops.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks, key, stepDuration, dataByPollutant, visualData, stopPlayback]);
+    }, [isPlaying, visualData, dataByPollutant, sonificationOptions, stopAudioEngine]);
 
 
   const handleGenerateVideo = async () => {
