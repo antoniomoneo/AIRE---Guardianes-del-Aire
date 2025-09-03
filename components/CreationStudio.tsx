@@ -86,6 +86,22 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
 
   const sonificationOptions: SonificationOptions = useMemo(() => ({ tracks, key, stepDuration }), [tracks, key, stepDuration]);
 
+  const stopPlayback = useCallback(() => {
+    if (playbackCleanupRef.current) {
+        try { playbackCleanupRef.current(); } catch {}
+        playbackCleanupRef.current = null;
+    }
+    try {
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+    } catch {}
+    if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
   useEffect(() => {
     if (tracks.length === 0) addTrack();
     const handleKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
@@ -93,14 +109,9 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     
     return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        playbackCleanupRef.current?.();
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-        try {
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
-        } catch {}
+        stopPlayback();
     };
-  }, []);
+  }, [stopPlayback]);
 
   const dataByPollutant = useMemo(() => {
     const filteredByYear = data.filter(d => d.ANO >= startYear && d.ANO <= endYear);
@@ -150,36 +161,27 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             if (pending) return;
             pending = true;
             requestAnimationFrame(() => {
+                pending = false;
                 if (p5InstanceRef.current === currentP5Instance && container) {
                     const newSize = container.clientWidth;
-                    if (currentP5Instance.width !== newSize) {
-                        currentP5Instance.resizeCanvas(newSize, newSize);
-                        currentP5Instance.redraw();
-                    }
+                    currentP5Instance.resizeCanvas(newSize, newSize);
+                    currentP5Instance.redraw();
                 }
-                pending = false;
             });
         };
 
         const resizeObserver = new ResizeObserver(handleResize);
         resizeObserver.observe(container);
         
-        // Initial draw after a short delay to ensure layout is stable.
         const initialDrawTimeout = setTimeout(() => { p5InstanceRef.current?.redraw(); }, 50);
 
         return () => {
-            if (playbackCleanupRef.current) playbackCleanupRef.current();
-            try {
-                Tone.Transport.stop();
-                Tone.Transport.cancel();
-            } catch {}
-            if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-            setIsPlaying(false);
+            stopPlayback();
             resizeObserver.disconnect();
             clearTimeout(initialDrawTimeout);
             currentP5Instance?.remove();
         };
-    }, [selectedVizId, visualData]);
+    }, [selectedVizId, visualData, stopPlayback]);
 
 
     const addTrack = () => {
@@ -191,11 +193,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     
     const handlePlay = useCallback(async () => {
         if (isPlaying) {
-            if (playbackCleanupRef.current) playbackCleanupRef.current();
-            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-            Tone.Transport.stop();
-            Tone.Transport.cancel();
-            setIsPlaying(false);
+            stopPlayback();
             return;
         }
 
@@ -205,8 +203,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
         }
         
         await Tone.start();
-        Tone.Transport.stop();
-        Tone.Transport.cancel();
+        stopPlayback(); // Ensure clean state before starting
 
         playbackCleanupRef.current = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
         Tone.Transport.start();
@@ -217,71 +214,60 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
 
         const tick = () => {
             const elapsedTimeSec = (performance.now() - startedAt) / 1000;
-            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / sonificationOptions.stepDuration));
+            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / stepDuration));
             
             if (currentFrameIndexRef.current !== newFrameIndex) {
                  currentFrameIndexRef.current = newFrameIndex;
                  p5InstanceRef.current?.redraw();
             }
 
-            if (elapsedTimeSec < total * sonificationOptions.stepDuration) {
+            if (elapsedTimeSec < total * stepDuration) {
                 animationFrameRef.current = requestAnimationFrame(tick);
             } else {
-                 if (playbackCleanupRef.current) playbackCleanupRef.current();
-                 if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-                 Tone.Transport.stop();
-                 Tone.Transport.cancel();
-                 setIsPlaying(false);
+                 stopPlayback();
             }
         };
         animationFrameRef.current = requestAnimationFrame(tick);
 
-    }, [isPlaying, dataByPollutant, sonificationOptions, visualData]);
+    }, [isPlaying, dataByPollutant, sonificationOptions, visualData, stopPlayback, stepDuration]);
 
   // This effect handles restarting playback if options change while playing.
   useEffect(() => {
     if (!isPlaying) return;
     
-    // Stop current playback silently
-    playbackCleanupRef.current?.();
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
-
-    // Define an async function to restart playback
     const restartPlayback = async () => {
-        await Tone.start(); // Ensure context is running
-        playbackCleanupRef.current = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
+        await Tone.start();
+        stopPlayback(); // stop current playback
+    
+        // Immediately restart with new settings
+        const cleanup = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
+        playbackCleanupRef.current = cleanup;
         Tone.Transport.start();
-        
+        setIsPlaying(true); // Set it back to true
+
         const startedAt = performance.now();
         const total = visualData.length;
-        
         const tick = () => {
             const elapsedTimeSec = (performance.now() - startedAt) / 1000;
-            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / sonificationOptions.stepDuration));
-            
+            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / stepDuration));
             if (currentFrameIndexRef.current !== newFrameIndex) {
                 currentFrameIndexRef.current = newFrameIndex;
                 p5InstanceRef.current?.redraw();
             }
-            
-            if (elapsedTimeSec < total * sonificationOptions.stepDuration) {
+            if (elapsedTimeSec < total * stepDuration) {
                 animationFrameRef.current = requestAnimationFrame(tick);
             } else {
-                playbackCleanupRef.current?.();
-                if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-                Tone.Transport.stop();
-                Tone.Transport.cancel();
-                setIsPlaying(false);
+                stopPlayback();
             }
         };
         animationFrameRef.current = requestAnimationFrame(tick);
     };
 
     restartPlayback();
-
-  }, [sonificationOptions, dataByPollutant, visualData]); // Note: `isPlaying` is NOT a dependency to prevent loops.
+    // This effect should ONLY re-run when these dependencies change.
+    // `isPlaying` is intentionally omitted to avoid loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, key, stepDuration, dataByPollutant, visualData, stopPlayback]);
 
 
   const handleGenerateVideo = async () => {
