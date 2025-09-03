@@ -59,8 +59,9 @@ export const renderSonification = (
     dataByPollutant: Record<Pollutant, DashboardDataPoint[]>,
     options: SonificationOptions & { masterLength: number }
 ): () => void => {
+    Tone.Transport.cancel();
+    Tone.Transport.bpm.value = (1 / options.stepDuration) * 60;
     
-    // Create all synthesizers and samplers upfront for this sonification instance.
     const synthsByTrackId: Record<string, Tone.PolySynth | Tone.Sampler> = {};
     options.tracks.forEach(track => {
         if (!track.isMuted && track.instrument !== 'rhythmicKit') {
@@ -69,7 +70,7 @@ export const renderSonification = (
     });
     const drumKit = new Tone.Sampler({ urls: { C1: "kick.mp3", C2: "snare.mp3", C3: "hihat.mp3" }, baseUrl: "https://tonejs.github.io/audio/drum-samples/CR78/" }).toDestination();
 
-    const parts: Tone.Part[] = [];
+    const parts: Tone.Part<any>[] = [];
 
     options.tracks.forEach(track => {
         if (track.isMuted) return;
@@ -82,32 +83,48 @@ export const renderSonification = (
         const maxVal = Math.max(...values);
         const scale = options.key === 'major' ? MAJOR_SCALE : MINOR_SCALE;
         
-        const noteEvents = [];
+        if (track.instrument === 'rhythmicKit') {
+            const kickPart = new Tone.Part((time) => {
+                if (drumKit && !drumKit.disposed) drumKit.triggerAttackRelease('C1', '8n', time, track.volume);
+            }, []).start(0);
+            const snarePart = new Tone.Part((time) => {
+                if (drumKit && !drumKit.disposed) drumKit.triggerAttackRelease('C2', '8n', time, track.volume * 0.8);
+            }, []).start(0);
+            const hatPart = new Tone.Part((time) => {
+                if (drumKit && !drumKit.disposed) drumKit.triggerAttackRelease('C3', '16n', time, track.volume * 0.5);
+            }, []).start(0);
+            parts.push(kickPart, snarePart, hatPart);
 
-        for (let i = 0; i < options.masterLength; i++) {
-            if (i >= data.length) continue;
-            const point = data[i];
-            
-            if (point.value < track.filterRange.min || point.value > track.filterRange.max) continue;
-
-            const time = i * options.stepDuration;
-
-            if (track.instrument === 'rhythmicKit') {
+            for (let i = 0; i < options.masterLength; i++) {
+                if (i >= data.length) continue;
+                const point = data[i];
+                if (point.value < track.filterRange.min || point.value > track.filterRange.max) continue;
+                
+                const time = i * options.stepDuration;
                 const kickThreshold = minVal + (maxVal - minVal) * 0.2;
                 const snareThreshold = minVal + (maxVal - minVal) * 0.6;
-                if (point.value <= kickThreshold) noteEvents.push({ time, pitch: 'C1', duration: '8n', velocity: track.volume });
-                if (point.value > kickThreshold) noteEvents.push({ time, pitch: 'C3', duration: '16n', velocity: track.volume * 0.5 });
-                if (point.value >= snareThreshold) noteEvents.push({ time, pitch: 'C2', duration: '8n', velocity: track.volume * 0.8 });
-            } else {
+                
+                if (point.value <= kickThreshold) kickPart.add(time);
+                if (point.value > kickThreshold) hatPart.add(time);
+                if (point.value >= snareThreshold) snarePart.add(time);
+            }
+        } else {
+            const noteEvents: any[] = [];
+            for (let i = 0; i < options.masterLength; i++) {
+                if (i >= data.length) continue;
+                const point = data[i];
+                
+                if (point.value < track.filterRange.min || point.value > track.filterRange.max) continue;
+
+                const time = i * options.stepDuration;
                 const scaleIndex = mapRange(point.value, minVal, maxVal, 0, scale.length * 2 - 1);
                 const baseOctave = 12 * track.octave;
                 const noteInScale = scale[scaleIndex % scale.length];
                 const noteOctaveOffset = Math.floor(scaleIndex / scale.length) * 12;
                 const rootNoteMidi = baseOctave + noteInScale + noteOctaveOffset;
-                const rootNote = Tone.Frequency(rootNoteMidi, 'midi').toNote();
-
+                
                 if (track.rhythm === 'sustained') {
-                    noteEvents.push({ time, pitch: rootNote, duration: options.stepDuration * 0.9, velocity: track.volume });
+                    noteEvents.push({ time, pitch: Tone.Frequency(rootNoteMidi, 'midi').toNote(), duration: options.stepDuration * 0.9, velocity: track.volume });
                 } else {
                     const thirdMidi = rootNoteMidi + (options.key === 'major' ? 4 : 3);
                     const fifthMidi = rootNoteMidi + 7;
@@ -126,54 +143,30 @@ export const renderSonification = (
                     });
                 }
             }
-        }
-        
-        if (noteEvents.length > 0) {
-            // In the Part callback, we only reference pre-created instruments.
-            const part = new Tone.Part((time, value) => {
-                if (track.instrument === 'rhythmicKit') {
-                    if (drumKit && !drumKit.disposed) {
-                        drumKit.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
-                    }
-                } else {
+
+            if (noteEvents.length > 0) {
+                const melodicPart = new Tone.Part((time, value) => {
                     const synth = synthsByTrackId[track.id];
                     if (synth && !synth.disposed) {
                        synth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
                     }
-                }
-            }, noteEvents).start(0);
-            parts.push(part);
+                }, noteEvents).start(0);
+                parts.push(melodicPart);
+            }
         }
     });
 
-    // The cleanup function now correctly disposes of all pre-created instruments.
+    // Return a robust cleanup function
     return () => {
-        parts.forEach(part => {
-            try {
-                part.stop(0);
-                part.clear();
-                part.dispose();
-            } catch (e) {
-                // Ignore errors if already disposed.
-            }
-        });
-
-        Object.values(synthsByTrackId).forEach(synth => {
-            try {
-                if (synth && !synth.disposed) {
-                    synth.dispose();
-                }
-            } catch (e) {
-                // Ignore errors.
-            }
-        });
-
-        try {
-            if (drumKit && !drumKit.disposed) {
-                drumKit.dispose();
-            }
-        } catch (e) {
-            // Ignore errors.
+        for (const p of parts) {
+            try { p.stop(); } catch (e) { /* ignore */ }
+            try { p.cancel(); } catch (e) { /* ignore */ }
+            try { p.clear(); } catch (e) { /* ignore */ }
+            try { p.dispose(); } catch (e) { /* ignore */ }
         }
+        for (const s of Object.values(synthsByTrackId)) {
+            try { s?.dispose(); } catch (e) { /* ignore */ }
+        }
+        try { if(drumKit && !drumKit.disposed) drumKit.dispose(); } catch (e) { /* ignore */ }
     };
 };
