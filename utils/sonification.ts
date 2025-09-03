@@ -156,17 +156,33 @@ export const renderSonification = (
         }
     });
 
-    // Return a robust cleanup function
     return () => {
-        for (const p of parts) {
-            try { p.stop(); } catch (e) { /* ignore */ }
-            try { p.cancel(); } catch (e) { /* ignore */ }
-            try { p.clear(); } catch (e) { /* ignore */ }
-            try { p.dispose(); } catch (e) { /* ignore */ }
+        // Stop and dispose all scheduled parts to prevent them from firing on cleaned-up synths.
+        parts.forEach(p => {
+            try {
+                if (p && !p.disposed) {
+                    p.stop(0).dispose();
+                }
+            } catch (e) {
+                // It's possible for parts to be disposed by other means, so we ignore errors here.
+            }
+        });
+
+        // Release all notes on melodic synths, allowing them to fade out gracefully.
+        // This is the key fix to prevent "Synth was already disposed" errors.
+        for (const synth of Object.values(synthsByTrackId)) {
+            try {
+                if (synth && !synth.disposed) {
+                    synth.releaseAll();
+                }
+            } catch (e) { /* ignore */ }
         }
-        for (const s of Object.values(synthsByTrackId)) {
-            try { s?.dispose(); } catch (e) { /* ignore */ }
-        }
-        try { if(drumKit && !drumKit.disposed) drumKit.dispose(); } catch (e) { /* ignore */ }
+
+        // Also release all notes on the drum sampler.
+        try {
+            if (drumKit && !drumKit.disposed) {
+                drumKit.releaseAll();
+            }
+        } catch (e) { /* ignore */ }
     };
 };
