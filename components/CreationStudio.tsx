@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import p5 from 'p5';
 import { v4 as uuidv4 } from 'uuid';
-import type { AirQualityRecord, DashboardDataPoint, VisualizationOption, TrackOptions, Pollutant, Key, SonificationOptions, Instrument, Rhythm } from '../types';
+import * as Tone from 'tone';
+import type { AirQualityRecord, DashboardDataPoint, VisualizationOption, TrackOptions, Pollutant, Key, SonificationOptions } from '../types';
 import { Pollutant as PollutantEnum } from '../types';
 import { POLLUTANT_NAMES } from '../constants';
 import { breathingOrbSketch } from '../visualizations/breathingOrb';
@@ -15,13 +16,12 @@ import { geometricSpiralSketch } from '../visualizations/geometricSpiral';
 import { starfieldSketch } from '../visualizations/starfield';
 import { glitchMatrixSketch } from '../visualizations/glitchMatrix';
 import { TrackControls } from './TrackControls';
-import { renderSonificationWAF } from '../utils/sonification';
+import { renderSonification } from '../utils/sonification';
 import { exportToVideo } from '../utils/videoExport';
 import { PublishModal } from './PublishModal';
 import { addGalleryItem } from '../utils/galleryService';
 import { awardPoints } from '../utils/scoringService';
 import { logoUrl } from '../utils/assets';
-import { getAudioContext } from '../utils/webaudiofont';
 
 interface CreationStudioProps {
   data: AirQualityRecord[];
@@ -81,9 +81,10 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
   const p5InstanceRef = useRef<p5 | null>(null);
   const canvasWrapperRef = useRef<HTMLDivElement>(null);
   const currentFrameIndexRef = useRef(0);
-  const playbackRef = useRef<{ stop: () => void } | null>(null);
+  const playbackCleanupRef = useRef<(() => void) | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  const sonificationOptions: SonificationOptions = useMemo(() => ({ tracks, key, stepDuration }), [tracks, key, stepDuration]);
 
   useEffect(() => {
     if (tracks.length === 0) addTrack();
@@ -92,8 +93,12 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     
     return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        playbackRef.current?.stop();
+        playbackCleanupRef.current?.();
         if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        try {
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
+        } catch {}
     };
   }, []);
 
@@ -137,25 +142,42 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
         };
 
         p5Instance = new p5(wrappedSketch);
+        const currentP5Instance = p5Instance;
         p5InstanceRef.current = p5Instance;
         
-        const resizeObserver = new ResizeObserver(() => {
-            if (p5InstanceRef.current && container) {
-                p5InstanceRef.current.resizeCanvas(container.clientWidth, container.clientWidth);
-                p5InstanceRef.current.redraw();
-            }
-        });
+        let pending = false;
+        const handleResize = () => {
+            if (pending) return;
+            pending = true;
+            requestAnimationFrame(() => {
+                if (p5InstanceRef.current === currentP5Instance && container) {
+                    const newSize = container.clientWidth;
+                    if (currentP5Instance.width !== newSize) {
+                        currentP5Instance.resizeCanvas(newSize, newSize);
+                        currentP5Instance.redraw();
+                    }
+                }
+                pending = false;
+            });
+        };
+
+        const resizeObserver = new ResizeObserver(handleResize);
         resizeObserver.observe(container);
         
+        // Initial draw after a short delay to ensure layout is stable.
         const initialDrawTimeout = setTimeout(() => { p5InstanceRef.current?.redraw(); }, 50);
 
         return () => {
-            playbackRef.current?.stop();
+            if (playbackCleanupRef.current) playbackCleanupRef.current();
+            try {
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+            } catch {}
             if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
             setIsPlaying(false);
             resizeObserver.disconnect();
             clearTimeout(initialDrawTimeout);
-            p5Instance?.remove();
+            currentP5Instance?.remove();
         };
     }, [selectedVizId, visualData]);
 
@@ -167,47 +189,100 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
     const removeTrack = (id: string) => setTracks(prev => prev.filter(t => t.id !== id));
     const updateTrack = (id: string, newOptions: Partial<TrackOptions>) => setTracks(prev => prev.map(t => t.id === id ? { ...t, ...newOptions } : t));
     
-    const sonificationOptions: SonificationOptions = useMemo(() => ({ tracks, key, stepDuration }), [tracks, key, stepDuration]);
-
     const handlePlay = useCallback(async () => {
         if (isPlaying) {
-            playbackRef.current?.stop();
-            if(animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            if (playbackCleanupRef.current) playbackCleanupRef.current();
+            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            Tone.Transport.stop();
+            Tone.Transport.cancel();
             setIsPlaying(false);
             return;
         }
 
-        if (visualData.length === 0) return;
+        if (visualData.length === 0) {
+            alert("No hay datos para el rango de años seleccionado.");
+            return;
+        }
         
-        getAudioContext().resume();
+        await Tone.start();
+        Tone.Transport.stop();
+        Tone.Transport.cancel();
+
+        playbackCleanupRef.current = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
+        Tone.Transport.start();
         setIsPlaying(true);
-        currentFrameIndexRef.current = 0;
-        
-        playbackRef.current = await renderSonificationWAF(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
 
-        const p5ToUse = p5InstanceRef.current;
-        const timelineLength = visualData.length;
-        const startedAt = performance.now() + 200; // Match audio start delay
+        const startedAt = performance.now();
+        const total = visualData.length;
 
-        function tick() {
+        const tick = () => {
             const elapsedTimeSec = (performance.now() - startedAt) / 1000;
-            const newFrameIndex = Math.floor(elapsedTimeSec / stepDuration);
+            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / sonificationOptions.stepDuration));
+            
+            if (currentFrameIndexRef.current !== newFrameIndex) {
+                 currentFrameIndexRef.current = newFrameIndex;
+                 p5InstanceRef.current?.redraw();
+            }
 
-            if (newFrameIndex < timelineLength) {
-                if (newFrameIndex !== currentFrameIndexRef.current) {
-                    currentFrameIndexRef.current = newFrameIndex;
-                    if (p5InstanceRef.current === p5ToUse) p5ToUse?.redraw();
-                }
+            if (elapsedTimeSec < total * sonificationOptions.stepDuration) {
                 animationFrameRef.current = requestAnimationFrame(tick);
             } else {
-                currentFrameIndexRef.current = timelineLength - 1;
-                if (p5InstanceRef.current === p5ToUse) p5ToUse?.redraw();
-                setIsPlaying(false);
+                 if (playbackCleanupRef.current) playbackCleanupRef.current();
+                 if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+                 Tone.Transport.stop();
+                 Tone.Transport.cancel();
+                 setIsPlaying(false);
             }
-        }
+        };
         animationFrameRef.current = requestAnimationFrame(tick);
 
-    }, [isPlaying, dataByPollutant, sonificationOptions, visualData.length, stepDuration]);
+    }, [isPlaying, dataByPollutant, sonificationOptions, visualData]);
+
+  // This effect handles restarting playback if options change while playing.
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    // Stop current playback silently
+    playbackCleanupRef.current?.();
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+
+    // Define an async function to restart playback
+    const restartPlayback = async () => {
+        await Tone.start(); // Ensure context is running
+        playbackCleanupRef.current = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength: visualData.length });
+        Tone.Transport.start();
+        
+        const startedAt = performance.now();
+        const total = visualData.length;
+        
+        const tick = () => {
+            const elapsedTimeSec = (performance.now() - startedAt) / 1000;
+            const newFrameIndex = Math.min(total - 1, Math.floor(elapsedTimeSec / sonificationOptions.stepDuration));
+            
+            if (currentFrameIndexRef.current !== newFrameIndex) {
+                currentFrameIndexRef.current = newFrameIndex;
+                p5InstanceRef.current?.redraw();
+            }
+            
+            if (elapsedTimeSec < total * sonificationOptions.stepDuration) {
+                animationFrameRef.current = requestAnimationFrame(tick);
+            } else {
+                playbackCleanupRef.current?.();
+                if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+                setIsPlaying(false);
+            }
+        };
+        animationFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    restartPlayback();
+
+  }, [sonificationOptions, dataByPollutant, visualData]); // Note: `isPlaying` is NOT a dependency to prevent loops.
+
 
   const handleGenerateVideo = async () => {
     setIsRendering(true);
@@ -343,7 +418,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
                     </div>
                 </div>
 
-                <div className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col items-center justify-center p-4 min-w-0 overflow-hidden">
+                <div className="order-1 lg:order-2 w-full lg:flex-1 flex flex-col items-center justify-center p-4 min-w-0">
                     <div className="flex items-center justify-start gap-3 px-2 pb-2 w-full">
                         <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
                         <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>

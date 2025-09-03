@@ -121,7 +121,6 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
             const { clientWidth, clientHeight } = container;
             const canvas = renderer.domElement;
 
-            // Check if the canvas size is different to avoid triggering a feedback loop
             const needResize = canvas.width !== clientWidth || canvas.height !== clientHeight;
             if (needResize) {
                 camera.aspect = clientWidth / clientHeight;
@@ -138,24 +137,19 @@ export const Studio3D: React.FC<Studio3DProps> = ({ data, onClose, userName }) =
         return () => {
             const instanceToCleanup = currentRenderer;
             
-            // 1. Immediately invalidate the ref. Any pending animation frame
-            // that runs after this line will fail its currency check and exit.
             if (rendererRef.current === instanceToCleanup) {
                 rendererRef.current = null;
             }
 
-            // 2. Stop scheduling new work.
             cancelAnimationFrame(animationFrameId);
             resizeObserver.disconnect();
             
-            // 3. Dispose of Three.js resources.
             controlsToCleanup.dispose();
             if (cleanupRef.current) {
                 cleanupRef.current();
-                cleanupRef.current = null; // Prevent re-cleanup
+                cleanupRef.current = null; 
             }
             
-            // 4. Remove canvas from DOM and dispose renderer.
             if (container && container.contains(instanceToCleanup.domElement)) {
                 container.removeChild(instanceToCleanup.domElement);
             }

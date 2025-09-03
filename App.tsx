@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isParticipaOpen, setIsParticipaOpen] = useState(false);
   const [isKnowledgeBaseOpen, setIsKnowledgeBaseOpen] = useState(false);
+  const [isJoinUsOpen, setIsJoinUsOpen] = useState(false);
 
   const [isNarrationEnabled, setIsNarrationEnabled] = useState(true);
   const { data, loading, error } = useAirQualityData();
@@ -109,6 +110,7 @@ const App: React.FC = () => {
     setIsAiAssistantOpen(false);
     setIsParticipaOpen(false);
     setIsKnowledgeBaseOpen(false);
+    setIsJoinUsOpen(false);
   }, []);
 
   const handleGoHome = useCallback(() => {
@@ -215,6 +217,7 @@ const App: React.FC = () => {
                 onOpenAiAssistant={() => openModal(setIsAiAssistantOpen)}
                 onOpenParticipa={() => openModal(setIsParticipaOpen)}
                 onOpenKnowledgeBase={() => openModal(setIsKnowledgeBaseOpen)}
+                onOpenJoinUs={() => openModal(setIsJoinUsOpen)}
             />;
         default: return null;
     }
@@ -302,6 +305,10 @@ const App: React.FC = () => {
       {isKnowledgeBaseOpen && (
         <KnowledgeBase onClose={() => setIsKnowledgeBaseOpen(false)} userName={userName} />
       )}
+
+      {isJoinUsOpen && (
+        <JoinUsModal onClose={() => setIsJoinUsOpen(false)} />
+      )}
     </main>
   );
 };
@@ -383,6 +390,47 @@ const AiAssistant: React.FC<{data: any, onClose: () => void, userName: string}> 
                     />
                 </div>
             </div>
+        </div>
+    );
+};
+
+const JoinUsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+          if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [onClose]);
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+            <div className="bg-gray-900/95 border border-amber-500/30 rounded-2xl shadow-2xl w-full max-w-3xl h-full max-h-[90vh] p-6 flex flex-col relative" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center pb-4 border-b border-gray-700 flex-shrink-0">
+                    <h2 className="text-2xl font-orbitron text-amber-300">Súmate a Tangible Data</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-3xl leading-none" aria-label="Cerrar">&times;</button>
+                </div>
+                <div className="flex-grow mt-4 pr-2 overflow-y-auto text-gray-300 space-y-4">
+                    <p>
+                        Cualquiera puede formar parte: somos un colectivo de Tangible Data Nomads, personas apasionadas por el arte, el diseño industrial, la programación, la visualización, la comunicación científica, la sostenibilidad y la educación.
+                    </p>
+                    <p className="font-bold text-amber-400 text-lg">
+                        Nuestro objetivo es claro: poner los datos en manos de todas las personas a través de experiencias que se entienden, se tocan y se sienten.
+                    </p>
+                    <p>
+                        Si quieres unirte al cambio, escríbenos a <a href="mailto:hello@tangibledata.xyz" className="text-cyan-400 hover:underline">hello@tangibledata.xyz</a>.
+                    </p>
+                </div>
+            </div>
+             <style>{`
+                @keyframes fade-in {
+                    from { opacity: 0; transform: scale(0.95); }
+                    to { opacity: 1; transform: scale(1); }
+                }
+                .animate-fade-in {
+                    animation: fade-in 0.3s ease-out forwards;
+                }
+            `}</style>
         </div>
     );
 };

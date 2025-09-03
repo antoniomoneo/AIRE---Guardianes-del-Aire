@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Label, ResponsiveContainer } from 'recharts';
 import { awardPoints } from '../utils/scoringService';
@@ -14,10 +13,6 @@ interface RealTimeDataProps {
   userName: string;
   historicalData: AirQualityRecord[];
 }
-
-const TARGET_RAW_URL = "https://raw.githubusercontent.com/antoniomoneo/Datasets/main/data/calair/latest.flat.csv";
-const DATASET_URL = "/api/proxy?url=" + encodeURIComponent(TARGET_RAW_URL);
-
 
 // FIX: Use 'as const' to infer literal types for keys, making PollutantCode a union of literals instead of string.
 const POLLUTANT_MAP = {
@@ -84,49 +79,131 @@ type ParsedData = {
     records: RealTimeRecord[];
     stations: Station[];
     date: Date | null;
+    diagnostics: {
+        header: string[];
+        delimiter: string;
+        totalLines: number;
+        validRecords: number;
+    }
 };
+
+/**
+ * Decodes an ArrayBuffer into a string, trying multiple common encodings.
+ * It also removes the BOM (Byte Order Mark) if present.
+ * @param buf The ArrayBuffer to decode.
+ * @returns The decoded string.
+ */
+function decodeSmart(buf: ArrayBuffer): string {
+    const tryDecode = (enc: string) => new TextDecoder(enc, { fatal: false }).decode(buf);
+    const hasManyRepl = (s: string) => (s.match(/\uFFFD/g)?.length || 0) > 2;
+
+    let text = tryDecode('utf-8');
+    if (!hasManyRepl(text)) return text.replace(/^\uFEFF/, '');
+
+    console.warn("UTF-8 decoding resulted in replacement characters, trying windows-1252.");
+    text = tryDecode('windows-1252');
+    if (!hasManyRepl(text)) return text.replace(/^\uFEFF/, '');
+    
+    console.warn("windows-1252 decoding also resulted in replacement characters, trying iso-8559-1.");
+    return tryDecode('iso-8559-1').replace(/^\uFEFF/, '');
+}
+
+/**
+ * Parses a single line of a CSV file, handling quoted fields.
+ * @param line The string for a single CSV row.
+ * @param delimiter The character used to separate fields (e.g., ',' or ';').
+ * @returns An array of strings representing the fields in the row.
+ */
+const parseCsvLine = (line: string, delimiter: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+            if (inQuotes && line[i+1] === '"') { // Escaped quote ("")
+                current += '"';
+                i++; // Skip the second quote
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (char === delimiter && !inQuotes) {
+            result.push(current);
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    result.push(current);
+    return result;
+};
+
 
 const parseCsvData = (csvText: string): ParsedData => {
     const lines = csvText.trim().split('\n');
-    const headerLine = lines.shift();
-    if (!headerLine) return { records: [], stations: [], date: null };
+    const headerLine = lines.shift()?.trim();
+    const diagnostics = { header: [] as string[], delimiter: ',', totalLines: lines.length, validRecords: 0 };
 
-    const header = headerLine.split(',').map(h => h.trim());
+    if (!headerLine) {
+        console.error("CSV Diagnostic: Header line is missing.");
+        return { records: [], stations: [], date: null, diagnostics };
+    }
 
+    // 1. Detect delimiter
+    diagnostics.delimiter = (headerLine.match(/;/g) || []).length > (headerLine.match(/,/g) || []).length ? ';' : ',';
+    
+    // 2. Parse and normalize header
+    const rawHeader = parseCsvLine(headerLine, diagnostics.delimiter);
+    const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/"/g, '').trim().toUpperCase();
+    
+    const headerAliases: Record<string, string> = {
+        'AÑO': 'ANO',
+        'ESTACION_ID': 'ESTACION',
+        'H': 'HORA',
+        'VALIDACION_ESTADO': 'VALIDACION'
+    };
+    const header = rawHeader.map(h => {
+        const normalized = norm(h);
+        return headerAliases[normalized] || normalized;
+    });
+    diagnostics.header = header;
+    
+    // 3. Create column map and validate required columns
     const colMap: Record<string, number> = header.reduce((acc, col, idx) => {
-        acc[col] = idx;
+        if (col) acc[col] = idx;
         return acc;
     }, {} as Record<string, number>);
 
-    const requiredCols = ['ESTACION', 'MAGNITUD', 'ANO', 'MES', 'DIA', 'Hora', 'Valor', 'Validacion'];
-    for (const col of requiredCols) {
-        if (colMap[col] === undefined) {
-            console.error(`La columna requerida '${col}' no se encuentra en el fichero CSV.`);
-            return { records: [], stations: [], date: null };
-        }
+    const requiredCols = ['ESTACION', 'MAGNITUD', 'ANO', 'MES', 'DIA', 'HORA', 'VALOR', 'VALIDACION'];
+    const missingCols = requiredCols.filter(col => colMap[col] === undefined);
+    if (missingCols.length > 0) {
+        console.error(`CSV Diagnostic: Faltan columnas requeridas: ${missingCols.join(', ')}. Cabeceras detectadas:`, header);
+        return { records: [], stations: [], date: null, diagnostics };
     }
 
     const records: RealTimeRecord[] = [];
     let fileDate: Date | null = null;
     const foundStations = new Map<string, string>();
+    const validValues = new Set(["V", "VALIDO", "1"]);
 
     lines.forEach(line => {
         if (!line.trim()) return;
-        const values = line.split(',');
+        const values = parseCsvLine(line, diagnostics.delimiter);
         if (values.length < header.length) return;
 
-        const validacion = values[colMap['Validacion']]?.trim().replace(/"/g, '');
-        if (validacion !== 'V') return;
-
+        const validacionRaw = values[colMap['VALIDACION']];
+        const validacion = norm(validacionRaw);
+        if (!validValues.has(validacion)) return;
+        
         const pollutantCode = values[colMap['MAGNITUD']]?.trim().replace(/"/g, '') as PollutantCode;
         if (!POLLUTANT_MAP[pollutantCode]) return;
 
         const stationCode = values[colMap['ESTACION']]?.trim().replace(/"/g, '');
         if (!STATION_MAP[stationCode]) return;
 
-        const horaStr = values[colMap['Hora']]?.trim().replace(/"/g, '');
-        const valorStr = values[colMap['Valor']]?.trim().replace(/"/g, '');
-
+        const horaStr = values[colMap['HORA']];
+        const valorStr = values[colMap['VALOR']];
+        
         const hora = parseInt(horaStr, 10);
         const valor = parseFloat(valorStr);
 
@@ -138,9 +215,9 @@ const parseCsvData = (csvText: string): ParsedData => {
         }
 
         if (!fileDate) {
-            const year = parseInt(values[colMap['ANO']]?.trim().replace(/"/g, ''));
-            const month = parseInt(values[colMap['MES']]?.trim().replace(/"/g, '')) - 1;
-            const day = parseInt(values[colMap['DIA']]?.trim().replace(/"/g, ''));
+            const year = parseInt(values[colMap['ANO']]);
+            const month = parseInt(values[colMap['MES']]) - 1;
+            const day = parseInt(values[colMap['DIA']]);
             if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
                 fileDate = new Date(year, month, day);
             }
@@ -150,8 +227,9 @@ const parseCsvData = (csvText: string): ParsedData => {
     const stations = Array.from(foundStations.entries())
         .map(([code, name]) => ({ code, name }))
         .sort((a,b) => a.name.localeCompare(b.name));
-
-    return { records, stations, date: fileDate };
+    
+    diagnostics.validRecords = records.length;
+    return { records, stations, date: fileDate, diagnostics };
 };
 
 
@@ -180,38 +258,58 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
         const fetchData = async () => {
             setLoading(true);
             setError(null);
+            let diagnostics: ParsedData['diagnostics'] | null = null;
+        
             try {
-                let response = await fetch(DATASET_URL); // Intento 1: Proxy
-                
-                if (!response.ok) {
-                    console.warn(`El proxy falló (${response.status}). Intentando acceso directo a ${TARGET_RAW_URL}`);
-                    response = await fetch(TARGET_RAW_URL); // Intento 2: Fallback directo
+                const TARGET_RAW_URL = "https://raw.githubusercontent.com/antoniomoneo/Datasets/main/data/calair/latest.flat.csv";
+                const DATASET_URL = "/api/proxy?url=" + encodeURIComponent(TARGET_RAW_URL);
+
+                let response;
+                try {
+                    // 1. Try proxy first
+                    response = await fetch(DATASET_URL);
+                    if (!response.ok) {
+                        console.warn(`Proxy fetch failed (${response.status}), falling back to direct URL.`);
+                        throw new Error('Proxy failed'); // Trigger fallback
+                    }
+                } catch (proxyError) {
+                    // 2. Fallback to direct URL
+                    console.info("Attempting direct fetch...");
+                    response = await fetch(TARGET_RAW_URL);
+                    if (!response.ok) {
+                        throw new Error(`Direct fetch also failed (${response.status}).`);
+                    }
                 }
 
-                if (!response.ok) {
-                    let errorMessage = `Fallo en la red (${response.status})`;
-                    try {
-                        // El proxy puede enviar errores JSON, intentamos parsearlos para un mejor mensaje.
-                        const errorJson = await response.json();
-                        if (errorJson.error) {
-                            errorMessage = errorJson.error;
-                        }
-                    } catch (jsonError) {
-                        // La respuesta no era JSON, usar el mensaje de error HTTP original.
-                    }
-                    throw new Error(errorMessage);
-                }
-                const csvText = await response.text();
-                if (!csvText) {
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength === 0) {
                     throw new Error('El archivo de datos está vacío.');
                 }
+    
+                const csvText = decodeSmart(buffer);
+                if (!csvText.trim()) {
+                    throw new Error('El archivo de datos está vacío.');
+                }
+                
                 const data = parseCsvData(csvText);
+                diagnostics = data.diagnostics;
+    
+                if (data.records.length === 0) {
+                    throw new Error("El CSV no contiene registros validados para las columnas requeridas.");
+                }
+        
                 setParsedData(data);
             } catch (e) {
-                if (e instanceof Error) {
-                    setError(`No se pudieron cargar los datos de ayer. ${e.message}`);
-                } else {
-                    setError('Ocurrió un error desconocido.');
+                const message = e instanceof Error ? e.message : 'Ocurrió un error desconocido.';
+                setError(`No se pudieron cargar los datos de ayer. ${message}`);
+                console.error("Error al cargar datos:", e);
+                if (diagnostics) {
+                    console.log("--- Diagnóstico del CSV ---");
+                    console.log(`Delimitador detectado: "${diagnostics.delimiter}"`);
+                    console.log(`Cabeceras normalizadas:`, diagnostics.header);
+                    console.log(`Filas procesadas: ${diagnostics.totalLines}`);
+                    console.log(`Registros válidos encontrados: ${diagnostics.validRecords}`);
+                    console.log("--------------------------");
                 }
             } finally {
                 setLoading(false);

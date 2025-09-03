@@ -1,15 +1,14 @@
 import p5 from 'p5';
+import * as Tone from 'tone';
 import WebMMuxer from 'webm-muxer';
 import type { SonificationOptions, P5SketchFunction, DashboardDataPoint, Pollutant } from '../types';
-import { buildNotes } from './sonification';
-import { ensureWAFReady, loadPreset, queueNote, instrumentPresets } from './webaudiofont';
+import { renderSonification } from './sonification';
 
 // Add declarations for WebCodecs API types to prevent TypeScript errors
 declare var VideoEncoder: any;
 declare var AudioEncoder: any;
 declare var VideoFrame: any;
 declare var AudioData: any;
-declare var OfflineAudioContext: any;
 
 
 interface ExportOptions {
@@ -24,70 +23,36 @@ interface ExportOptions {
 export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
     const { sonificationOptions, visualData, dataByPollutant, sketch, onProgress, masterLength } = options;
 
-    // Check for WebCodecs support, as it's required for this functionality.
     if (typeof VideoEncoder === 'undefined' || typeof AudioEncoder === 'undefined') {
         alert('Tu navegador no soporta WebCodecs API, que es necesaria para exportar vídeo. Por favor, utiliza una versión reciente de Chrome, Edge o Opera.');
         throw new Error('WebCodecs API not supported in this browser.');
     }
 
     const frameRate = 1 / sonificationOptions.stepDuration;
-    const totalFrames = masterLength;
-    const duration = totalFrames * sonificationOptions.stepDuration;
-    const sampleRate = 44100;
+    const duration = masterLength * sonificationOptions.stepDuration;
+    const canvasSize = 500;
 
     onProgress(1);
     
-    // 1. Render Audio using OfflineAudioContext + WebAudioFont
-    const offlineCtx = new OfflineAudioContext(2, Math.ceil(duration * sampleRate), sampleRate);
-    const { player } = await ensureWAFReady(offlineCtx);
+    // 1. Render Audio using Tone.Offline
+    const audioBuffer = await Tone.Offline(() => {
+        // Schedule all the notes using the same logic as real-time playback
+        const cleanup = renderSonification(dataByPollutant, { ...sonificationOptions, masterLength });
+        // The cleanup function is not needed here as Tone.Offline manages resources.
+    }, duration);
 
-    const allNotes = buildNotes(dataByPollutant, { ...sonificationOptions, masterLength });
-    const requiredPresets = new Set(allNotes.map(n => n.presetName));
-    const presetObjects: Partial<Record<keyof typeof instrumentPresets, any>> = {};
-
-    for (const presetName of requiredPresets) {
-        presetObjects[presetName] = await loadPreset(offlineCtx, player, presetName);
-    }
-    
-    allNotes.forEach(note => {
-        const preset = presetObjects[note.presetName];
-        if (preset) {
-            queueNote({
-                context: offlineCtx, player, preset,
-                when: note.whenSec,
-                midi: note.midi,
-                duration: note.durationSec,
-                gain: note.gain,
-                destination: offlineCtx.destination,
-                isDrum: note.isDrum,
-            });
-        }
-    });
-
-    const audioBuffer = await offlineCtx.startRendering();
     onProgress(10);
     
     const tempContainer = document.createElement('div');
     tempContainer.style.cssText = 'position: absolute; top: -9999px; left: -9999px;';
     document.body.appendChild(tempContainer);
     
-    const canvasSize = 500;
-
     // 2. Initialize Video Muxer
     const target = new WebMMuxer.ArrayBufferTarget();
     let muxer = new WebMMuxer.Muxer({
         target: target,
-        video: {
-            codec: 'V_VP9',
-            width: canvasSize,
-            height: canvasSize,
-            frameRate: frameRate
-        },
-        audio: {
-            codec: 'A_OPUS',
-            sampleRate: audioBuffer.sampleRate,
-            numberOfChannels: audioBuffer.numberOfChannels
-        },
+        video: { codec: 'V_VP9', width: canvasSize, height: canvasSize, frameRate: frameRate },
+        audio: { codec: 'A_OPUS', sampleRate: audioBuffer.sampleRate, numberOfChannels: audioBuffer.numberOfChannels },
     });
 
     // 3. Setup encoders
@@ -96,11 +61,8 @@ export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
         error: (e: any) => console.error('VideoEncoder error:', e)
     });
     videoEncoder.configure({
-        codec: 'vp09.00.10.08', // VP9, profile 0, level 1.0, 8-bit color
-        width: canvasSize,
-        height: canvasSize,
-        framerate: frameRate,
-        bitrate: 2_000_000, // 2 Mbps
+        codec: 'vp09.00.10.08', width: canvasSize, height: canvasSize,
+        framerate: frameRate, bitrate: 2_000_000,
     });
 
     const audioEncoder = new AudioEncoder({
@@ -108,29 +70,18 @@ export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
         error: (e: any) => console.error('AudioEncoder error:', e)
     });
     audioEncoder.configure({
-        codec: 'opus',
-        sampleRate: audioBuffer.sampleRate,
-        numberOfChannels: audioBuffer.numberOfChannels,
-        bitrate: 128000, // 128 kbps
+        codec: 'opus', sampleRate: audioBuffer.sampleRate,
+        numberOfChannels: audioBuffer.numberOfChannels, bitrate: 128000,
     });
     
     // 4. Setup Headless p5 instance for rendering frames
-    let p5Instance: p5 | null = null;
     const p5Promise = new Promise<p5>(resolve => {
         const p5Sketch = sketch(visualData, { speed: 1 });
         const wrappedSketch = (p: p5) => {
-            const userSetup = p5Sketch(p).setup;
-            p.setup = () => {
-                p.createCanvas(canvasSize, canvasSize);
-                if (userSetup) userSetup();
-                p.noLoop();
-                resolve(p);
-            };
-             p.draw = () => {
-                p5Sketch(p).draw();
-             };
+            p.setup = () => { p.createCanvas(canvasSize, canvasSize); p5Sketch(p).setup(); p.noLoop(); resolve(p); };
+            p.draw = () => { p5Sketch(p).draw(); };
         };
-        p5Instance = new p5(wrappedSketch, tempContainer);
+        new p5(wrappedSketch, tempContainer);
     });
 
     const p = await p5Promise;
@@ -141,27 +92,19 @@ export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
     const canvasElement = tempContainer.querySelector('canvas');
     if (!canvasElement) throw new Error("Canvas element not found for exporting.");
 
-    const keyFrameInterval = Math.floor(frameRate * 10); // Insert a keyframe every 10 seconds
-
+    const totalFrames = masterLength;
     for (let i = 0; i < totalFrames; i++) {
         (p as any).getCurrentFrameIndex = () => i;
         p.redraw();
         
-        // Yield to allow canvas to update before creating the frame
         await new Promise(resolve => requestAnimationFrame(resolve));
 
         const frame = new VideoFrame(canvasElement, {
-            timestamp: i * sonificationOptions.stepDuration * 1_000_000, // timestamp in microseconds
-            duration: sonificationOptions.stepDuration * 1_000_000
+            timestamp: i * sonificationOptions.stepDuration * 1_000_000,
         });
 
-        const encodeOptions = {
-            keyFrame: i % keyFrameInterval === 0
-        };
-
-        videoEncoder.encode(frame, encodeOptions);
+        videoEncoder.encode(frame, { keyFrame: i % 60 === 0 });
         frame.close();
-
         onProgress(15 + (i / totalFrames) * 70);
     }
     
@@ -169,20 +112,15 @@ export const exportToVideo = async (options: ExportOptions): Promise<Blob> => {
     onProgress(85);
     
     // 6. Encode audio track
-    // For planar audio, the data for each channel must be concatenated into a single buffer.
-    const totalSamples = audioBuffer.length * audioBuffer.numberOfChannels;
-    const allChannelsData = new Float32Array(totalSamples);
+    const allChannelsData = new Float32Array(audioBuffer.length * audioBuffer.numberOfChannels);
     for (let channel = 0; channel < audioBuffer.numberOfChannels; channel++) {
         allChannelsData.set(audioBuffer.getChannelData(channel), channel * audioBuffer.length);
     }
     
     const audioData = new AudioData({
-        format: 'f32-planar',
-        sampleRate: audioBuffer.sampleRate,
-        numberOfFrames: audioBuffer.length,
-        numberOfChannels: audioBuffer.numberOfChannels,
-        timestamp: 0,
-        data: allChannelsData,
+        format: 'f32-planar', sampleRate: audioBuffer.sampleRate,
+        numberOfFrames: audioBuffer.length, numberOfChannels: audioBuffer.numberOfChannels,
+        timestamp: 0, data: allChannelsData,
     });
 
     audioEncoder.encode(audioData);

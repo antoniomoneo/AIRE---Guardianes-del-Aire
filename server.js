@@ -115,13 +115,18 @@ app.get("/api/proxy", async (req, res) => {
         'Accept': req.headers.accept || 'text/plain',
       }
     };
+    
+    // Añade el token de GitHub para los dominios permitidos para aumentar el rate-limit.
+    if (process.env.GITHUB_TOKEN && ['api.github.com', 'raw.githubusercontent.com'].includes(parsedUrl.hostname)) {
+      fetchOptions.headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+    }
 
     const proxyResponse = await fetch(targetUrl, fetchOptions);
-    const responseBody = await proxyResponse.text();
+    const responseBody = await proxyResponse.arrayBuffer();
 
     res.status(proxyResponse.status);
     res.type(proxyResponse.headers.get('content-type') || 'text/plain');
-    res.send(responseBody);
+    res.send(Buffer.from(responseBody));
     
   } catch (error) {
     console.error('Error in /api/proxy:', error);
