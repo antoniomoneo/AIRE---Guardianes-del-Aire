@@ -137,11 +137,18 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
         const container = canvasWrapperRef.current;
         if (!viz || !container) return;
 
+        // Ensure the canvas never overflows its container
+        container.style.overflow = 'hidden';
+
         let p5Instance: p5;
         const sketchFunc = viz.sketch(visualData, { speed: 1 });
         const wrappedSketch = (p: p5) => {
             (p as any).getCurrentFrameIndex = () => currentFrameIndexRef.current;
-            p.setup = () => { p.createCanvas(container.clientWidth, container.clientWidth).parent(container); sketchFunc(p).setup(); p.noLoop(); };
+            p.setup = () => {
+                p.createCanvas(container.clientWidth, container.clientHeight).parent(container);
+                sketchFunc(p).setup();
+                p.noLoop();
+            };
             p.draw = () => { sketchFunc(p).draw(); };
         };
 
@@ -156,8 +163,9 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
             requestAnimationFrame(() => {
                 pending = false;
                 if (p5InstanceRef.current === currentP5Instance && container) {
-                    const newSize = container.clientWidth;
-                    currentP5Instance.resizeCanvas(newSize, newSize);
+                    const newWidth = container.clientWidth;
+                    const newHeight = container.clientHeight;
+                    currentP5Instance.resizeCanvas(newWidth, newHeight);
                     currentP5Instance.redraw();
                 }
             });
@@ -399,7 +407,7 @@ export const CreationStudio: React.FC<CreationStudioProps> = ({ data, onClose, u
                         <img src={logoUrl} alt="Tangible Data Logo" className="h-6 w-auto" />
                         <h3 className="text-lg font-orbitron text-purple-200 text-left truncate">{title || 'Mi Creación'}</h3>
                     </div>
-                    <div ref={canvasWrapperRef} className="w-full aspect-square bg-black rounded-lg shadow-lg shadow-purple-500/10">
+                    <div ref={canvasWrapperRef} className="w-full aspect-square bg-black rounded-lg overflow-hidden shadow-lg shadow-purple-500/10">
                     </div>
                 </div>
             </div>
