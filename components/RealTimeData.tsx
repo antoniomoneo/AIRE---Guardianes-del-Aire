@@ -268,8 +268,9 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
                 try {
                     // 1. Try proxy first
                     response = await fetch(DATASET_URL);
-                    if (!response.ok) {
-                        console.warn(`Proxy fetch failed (${response.status}), falling back to direct URL.`);
+                    const ct = response.headers.get('content-type') || '';
+                    if (!response.ok || /text\/html/i.test(ct)) {
+                        console.warn(`Proxy fetch failed or returned HTML (status ${response.status}, ct=${ct}). Falling back to direct URL.`);
                         throw new Error('Proxy failed'); // Trigger fallback
                     }
                 } catch (proxyError) {
@@ -285,8 +286,11 @@ export const RealTimeData: React.FC<RealTimeDataProps> = ({ onClose, userName, h
                 if (buffer.byteLength === 0) {
                     throw new Error('El archivo de datos está vacío.');
                 }
-    
+
                 const csvText = decodeSmart(buffer);
+                if (/^\s*<!DOCTYPE\s+HTML/i.test(csvText)) {
+                    throw new Error('El servidor devolvió HTML en vez de CSV.');
+                }
                 if (!csvText.trim()) {
                     throw new Error('El archivo de datos está vacío.');
                 }
